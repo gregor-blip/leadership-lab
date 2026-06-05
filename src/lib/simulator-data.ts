@@ -1,65 +1,69 @@
-export type Profile = {
-  professional: {
-    region: string;
-    age: number;
-    companyType: string;
-    sector: string;
-    role: string;
-    yearsExperience: number;
-    ambition: string;
-  };
-  psychological: {
-    riskAppetite: number;
-    decisiveness: number;
-    conflictStyle: number;
-    needForControl: number;
-    opennessToDissent: number;
-    ethicalAnchoring: number;
-  };
-};
+// ---- Mentors (names ARE their personalities). ids match the Edge Function. ----
+export type Mentor = { id: string; name: string; school: string; blurb: string };
 
-export const DEFAULT_PROFILE: Profile = {
-  professional: {
-    region: "Western Europe",
-    age: 31,
-    companyType: "Listed multinational",
-    sector: "Industrial manufacturing",
-    role: "Senior Product Manager",
-    yearsExperience: 7,
-    ambition: "C-suite within 10 years",
+export const MENTORS: Mentor[] = [
+  {
+    id: "disruptor",
+    name: "The Disruptor",
+    school: "Disruptive innovation",
+    blurb:
+      "Sees the cheaper, simpler threat coming from underneath — and doesn't care whether you think it applies to you.",
   },
-  psychological: {
-    riskAppetite: 62,
-    decisiveness: 78,
-    conflictStyle: 45,
-    needForControl: 71,
-    opennessToDissent: 38,
-    ethicalAnchoring: 66,
+  {
+    id: "operator",
+    name: "The Operator",
+    school: "Execution & operations",
+    blurb:
+      "Turns every idea into who-does-what-by-when. Allergic to vision without a mechanism.",
   },
-};
+  {
+    id: "contrarian",
+    name: "The Contrarian",
+    school: "Behavioral economics & cognitive bias",
+    blurb:
+      "Hunts the bias hiding in your confidence, and asks what evidence would actually change your mind.",
+  },
+  {
+    id: "systemsThinker",
+    name: "The Systems-Thinker",
+    school: "Systems thinking",
+    blurb:
+      "Watches the feedback loops and the delays, and shows you the second- and third-order effects you missed.",
+  },
+  {
+    id: "ethicalChallenger",
+    name: "The Ethical Challenger",
+    school: "Stakeholder ethics",
+    blurb:
+      "Asks who bears the cost that wasn't in the room — and whether the decision would survive the front page.",
+  },
+];
 
-export const PSY_LABELS: Record<keyof Profile["psychological"], [string, string]> = {
-  riskAppetite: ["Risk-averse", "Risk-seeking"],
-  decisiveness: ["Deliberative", "Decisive"],
-  conflictStyle: ["Accommodating", "Confrontational"],
-  needForControl: ["Delegative", "Controlling"],
-  opennessToDissent: ["Closed", "Open to dissent"],
-  ethicalAnchoring: ["Pragmatic", "Principled"],
-};
+// ---- Conversation payloads (mirror the Edge Function `turn` response) ----
+export type Figure = { label: string; value: string };
 
-export const MENTORS = [
-  { id: "drucker",     name: "The Strategist", accent: "var(--ink)",    school: "Druckerian management" },
-  { id: "machiavelli", name: "The Realist",    accent: "var(--ink)",    school: "Political realism" },
-  { id: "sen",         name: "The Ethicist",   accent: "var(--ink)",    school: "Capabilities & stakeholder ethics" },
-  { id: "taleb",       name: "The Skeptic",    accent: "var(--ink)",    school: "Risk & fragility" },
-] as const;
+export type AnalystAnswer = { spoke: boolean; answer: string; figures: Figure[] };
 
-export type Scenario = {
-  title: string;
-  context: string;
-  dilemma: string;
-  stakes: string[];
-  options: { id: string; label: string; description: string }[];
-};
+export type CouncilMessage = { id: string; name: string; school: string; message: string };
 
-export type Reaction = { id: string; headline: string; critique: string; probe: string };
+export type TurnResponse = { analyst: AnalystAnswer; council: CouncilMessage[]; note: string };
+
+// ---- Transcript (flat, in-memory). `note` entries are display-only and are
+// NOT sent back to the model as history. ----
+export type TranscriptEntry =
+  | { kind: "participant"; text: string }
+  | { kind: "analyst"; text: string; figures: Figure[] }
+  | { kind: "council"; id: string; name: string; school: string; text: string }
+  | { kind: "note"; text: string };
+
+// Build the history contract the Edge Function expects:
+//   [{ role: "participant" | "analyst" | "council", name?, text }]
+export function toHistory(transcript: TranscriptEntry[]) {
+  return transcript
+    .filter((e) => e.kind !== "note")
+    .map((e) => {
+      if (e.kind === "participant") return { role: "participant", text: e.text };
+      if (e.kind === "analyst") return { role: "analyst", text: e.text };
+      return { role: "council", name: (e as any).name, text: (e as any).text };
+    });
+}

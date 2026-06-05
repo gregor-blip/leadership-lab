@@ -1,329 +1,432 @@
-import { useState } from "react";
-import { DEFAULT_PROFILE, PSY_LABELS, type Profile, type Scenario, type Reaction, MENTORS } from "@/lib/simulator-data";
-import { generateScenario, generateReactions } from "@/lib/simulator-client";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { MENTORS, type TranscriptEntry, type Figure } from "@/lib/simulator-data";
+import { getCase, sendTurn } from "@/lib/simulator-client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AI Leadership Simulator" },
-      { name: "description", content: "Adversarial sparring partners for leadership decisions, grounded in distinct schools of management thought." },
+      { title: "IEDC Leadership Lab" },
+      {
+        name: "description",
+        content:
+          "A live, AI-powered MBA case experience. One real decision, in conversation with a council of five mentors.",
+      },
     ],
   }),
-  component: Simulator,
+  component: App,
 });
 
-function Simulator() {
-  const [profile] = useState<Profile>(DEFAULT_PROFILE);
-  const [scenario, setScenario] = useState<Scenario | null>(null);
-  const [choice, setChoice] = useState<Scenario["options"][number] | null>(null);
-  const [reactions, setReactions] = useState<Reaction[] | null>(null);
-  const [loading, setLoading] = useState<"none" | "scenario" | "react">("none");
-  const [error, setError] = useState<string | null>(null);
+type Phase = "onboarding" | "conversation";
 
-  async function newScenario() {
-    setError(null);
-    setReactions(null);
-    setChoice(null);
-    setLoading("scenario");
-    try { setScenario(await generateScenario(profile)); }
-    catch (e: any) { setError(String(e?.message ?? e)); }
-    finally { setLoading("none"); }
-  }
+function App() {
+  const [phase, setPhase] = useState<Phase>("onboarding");
+  const [caseText, setCaseText] = useState<string>("");
+  const [loadingCase, setLoadingCase] = useState(false);
 
-  async function submitChoice(opt: Scenario["options"][number]) {
-    if (!scenario) return;
-    setChoice(opt);
-    setReactions(null);
-    setError(null);
-    setLoading("react");
-    try { setReactions((await generateReactions(profile, scenario, opt)).reactions); }
-    catch (e: any) { setError(String(e?.message ?? e)); }
-    finally { setLoading("none"); }
+  async function begin() {
+    setLoadingCase(true);
+    try {
+      const { caseText } = await getCase();
+      setCaseText(caseText);
+      setPhase("conversation");
+    } catch (e) {
+      toast.error("Couldn't load the case", { description: String((e as any)?.message ?? e) });
+    } finally {
+      setLoadingCase(false);
+    }
   }
 
   return (
     <div className="min-h-screen bg-paper">
-      <div className="mx-auto max-w-[1400px] px-10 py-10">
-        <DeviceChrome>
-          {/* Header */}
-          <header className="grid grid-cols-12 border-b hairline pb-6">
-            <div className="col-span-8">
-              <div className="kicker">Studio / 001</div>
-              <h1 className="mt-3 text-[44px] leading-[0.95] font-medium tracking-tight">
-                AI Leadership Simulator
-              </h1>
-              <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-                Adversarial sparring partners, not real individuals. Each mentor speaks from a distinct school of management thought.
-              </p>
-            </div>
-            <div className="col-span-4 flex flex-col items-end justify-end">
-              <div className="kicker">Session</div>
-              <div className="numeral text-[44px] leading-none">{new Date().toISOString().slice(0, 10)}</div>
-            </div>
-          </header>
-
-          {/* Body */}
-          <div className="grid grid-cols-12 gap-0">
-            <ProfilePanel profile={profile} />
-            <main className="col-span-9 border-l hairline">
-              <ScenarioBlock
-                scenario={scenario}
-                loading={loading === "scenario"}
-                onGenerate={newScenario}
-                choice={choice}
-                onChoose={submitChoice}
-              />
-              <MentorBlock reactions={reactions} loading={loading === "react"} hasChoice={!!choice} />
-              {error && (
-                <div className="border-t hairline p-6 text-sm text-destructive">
-                  Error: {error}
-                </div>
-              )}
-            </main>
-          </div>
-        </DeviceChrome>
-
-        <footer className="mt-6 flex items-center justify-between text-xs text-muted-foreground">
-          <span className="kicker">Grounded in distinct schools of management thought — adversarial sparring partners, not real individuals.</span>
-          <span className="numeral">v0.1</span>
+      <Toaster position="top-right" />
+      <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
+        <AppChrome>
+          <Header />
+          {phase === "onboarding" ? (
+            <OnboardingBrief loading={loadingCase} onBegin={begin} />
+          ) : (
+            <Conversation caseText={caseText} />
+          )}
+        </AppChrome>
+        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="kicker">
+            A live case, in conversation — adversarial mentors grounded in distinct schools of thought, not real individuals.
+          </span>
+          <span className="numeral text-muted-foreground">IEDC · Bled</span>
         </footer>
       </div>
     </div>
   );
 }
 
-function DeviceChrome({ children }: { children: React.ReactNode }) {
+/* ---------- chrome + header ---------- */
+
+function AppChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border hairline bg-card shadow-[0_1px_0_0_var(--rule),0_40px_80px_-40px_rgba(0,0,0,0.15)]">
-      <div className="flex items-center justify-between border-b hairline px-5 py-2.5">
+    <div className="border hairline bg-card shadow-[0_40px_90px_-50px_rgba(60,40,10,0.35)]">
+      <div className="flex items-center justify-between border-b hairline px-4 py-2.5">
         <div className="flex gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.86_0.005_270)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.86_0.005_270)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.86_0.005_270)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
         </div>
-        <div className="kicker">simulator.local / studio</div>
+        <div className="kicker">iedc leadership lab — concept prototype</div>
         <div className="w-12" />
       </div>
-      <div className="p-10">{children}</div>
+      <div className="p-5 md:p-9">{children}</div>
     </div>
   );
 }
 
-function ProfilePanel({ profile }: { profile: Profile }) {
-  const p = profile.professional;
+function Header() {
   return (
-    <aside className="col-span-3 pr-6 pt-6">
-      <div className="kicker">Learner / 01</div>
-      <h2 className="mt-2 text-2xl tracking-tight">Profile</h2>
-
-      <Section label="Professional">
-        <Row k="Region" v={p.region} />
-        <Row k="Age" v={String(p.age)} mono />
-        <Row k="Company" v={p.companyType} />
-        <Row k="Sector" v={p.sector} />
-        <Row k="Role" v={p.role} />
-        <Row k="Experience" v={`${p.yearsExperience} yrs`} mono />
-        <Row k="Ambition" v={p.ambition} />
-      </Section>
-
-      <Section label="Psychological">
-        {(Object.keys(profile.psychological) as (keyof Profile["psychological"])[]).map((k) => (
-          <Bar key={k} k={k} v={profile.psychological[k]} />
-        ))}
-      </Section>
-    </aside>
-  );
-}
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mt-8">
-      <div className="mb-3 flex items-center justify-between border-b hairline pb-2">
-        <span className="kicker">{label}</span>
-      </div>
-      <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="text-muted-foreground">{k}</span>
-      <span className={mono ? "numeral" : "text-right"}>{v}</span>
-    </div>
-  );
-}
-
-function Bar({ k, v }: { k: keyof Profile["psychological"]; v: number }) {
-  const [lo, hi] = PSY_LABELS[k];
-  const label = k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-  return (
-    <div className="pt-1">
-      <div className="flex items-baseline justify-between text-[11px]">
-        <span>{label}</span>
-        <span className="numeral text-muted-foreground">{v}</span>
-      </div>
-      <div className="mt-1 h-px w-full bg-[var(--rule)]" />
-      <div className="relative h-1.5">
-        <div className="absolute inset-y-0 left-0 bg-ink" style={{ width: `${v}%` }} />
-      </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>{lo}</span>
-        <span>{hi}</span>
-      </div>
-    </div>
-  );
-}
-
-function ScenarioBlock({
-  scenario, loading, onGenerate, choice, onChoose,
-}: {
-  scenario: Scenario | null;
-  loading: boolean;
-  onGenerate: () => void;
-  choice: Scenario["options"][number] | null;
-  onChoose: (o: Scenario["options"][number]) => void;
-}) {
-  return (
-    <section className="px-8 py-8">
-      <div className="flex items-end justify-between border-b hairline pb-4">
-        <div>
-          <div className="kicker">Scenario / 02</div>
-          <h2 className="mt-2 text-3xl tracking-tight">
-            {scenario ? scenario.title : "Awaiting brief"}
-          </h2>
+    <header className="flex flex-col gap-4 border-b hairline pb-6 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <div className="kicker">IEDC Leadership Lab</div>
+        <h1 className="mt-2 text-[36px] font-medium leading-[0.95] tracking-tight md:text-[44px]">
+          A live case, in conversation.
+        </h1>
+        <div className="tagline mt-3 text-lg text-ink/80">
+          Not a quiz — an intelligence you talk to, command, and argue with.
         </div>
+      </div>
+      <span className="kicker shrink-0 border hairline px-2.5 py-1.5">Concept prototype</span>
+    </header>
+  );
+}
+
+/* ---------- onboarding brief (static, no AI call) ---------- */
+
+function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () => void }) {
+  return (
+    <section className="pt-7">
+      <div className="kicker">The brief / 00</div>
+      <h2 className="tagline mt-2 max-w-2xl text-2xl leading-snug md:text-[28px]">
+        You are an IEDC graduate and senior operator. Today, you sit in the president's seat.
+      </h2>
+
+      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-3">
+        <BriefPoint n="01" title="A real situation">
+          This is as close to a real executive situation as it gets. You'll face a real decision with
+          incomplete information. Talk freely, in your own words — the AI understands you.
+        </BriefPoint>
+        <BriefPoint n="02" title="Ask for the data">
+          You don't have all the numbers — so ask for them. Any metric, any analysis: ask, and the AI
+          runs it. You no longer calculate; you command. The old skill was doing the math. The new skill
+          is knowing what to ask.
+        </BriefPoint>
+        <BriefPoint n="03" title="You are not alone">
+          You command a council of five mentors. Their names are their personalities. They will disagree —
+          with you and with each other. Ask them, push them deeper, tell one to stay quiet, or talk to just
+          one. This is life, not software.
+        </BriefPoint>
+      </div>
+
+      <div className="mt-9 border-t hairline pt-6">
+        <div className="kicker mb-4">Your council</div>
+        <div className="grid grid-cols-1 gap-0 border hairline sm:grid-cols-2 lg:grid-cols-5">
+          {MENTORS.map((m, i) => (
+            <div
+              key={m.id}
+              className={`p-4 ${i < MENTORS.length - 1 ? "border-b hairline lg:border-b-0 lg:border-r" : ""} ${
+                i % 2 === 0 ? "sm:border-r hairline" : ""
+              } lg:border-r`}
+            >
+              <div className="kicker text-[9.5px]">{m.school}</div>
+              <div className="mt-1.5 text-lg tracking-tight">
+                {m.id === "ethicalChallenger" && <span className="mr-1.5 text-electric">●</span>}
+                {m.name}
+              </div>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{m.blurb}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <span className="kicker">No score · no right answer · the conversation is the point</span>
         <button
-          onClick={onGenerate}
+          onClick={onBegin}
           disabled={loading}
-          className="border hairline px-5 py-3 text-sm font-medium uppercase tracking-wider hover:bg-ink hover:text-paper disabled:opacity-40 transition-colors"
+          className="bg-electric px-7 py-3.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          {loading ? "Generating…" : scenario ? "New scenario" : "Generate scenario"}
+          {loading ? "Loading case…" : "Begin →"}
         </button>
       </div>
-
-      {!scenario && !loading && (
-        <div className="grid grid-cols-12 gap-6 py-12">
-          <div className="col-span-2 numeral text-[120px] leading-none text-ink">00</div>
-          <p className="col-span-7 self-end text-base text-muted-foreground">
-            Generate a leadership dilemma calibrated to your profile. Choose a path. Receive four critiques.
-          </p>
-        </div>
-      )}
-
-      {scenario && (
-        <div className="grid grid-cols-12 gap-6 pt-6">
-          <div className="col-span-2 numeral text-[96px] leading-none">01</div>
-          <div className="col-span-7 space-y-4">
-            <p className="text-[15px] leading-relaxed">{scenario.context}</p>
-            <p className="text-[15px] leading-relaxed font-medium">{scenario.dilemma}</p>
-          </div>
-          <div className="col-span-3 border-l hairline pl-4">
-            <div className="kicker mb-2">At stake</div>
-            <ul className="space-y-1.5 text-sm">
-              {scenario.stakes.map((s, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="numeral text-muted-foreground">0{i + 1}</span>
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="col-span-12 mt-4 border-t hairline pt-6">
-            <div className="kicker mb-3">Decision</div>
-            <div className="grid grid-cols-3 gap-0 border hairline">
-              {scenario.options.map((o, i) => {
-                const sel = choice?.id === o.id;
-                return (
-                  <button
-                    key={o.id}
-                    onClick={() => onChoose(o)}
-                    className={`relative text-left p-5 border-r hairline last:border-r-0 transition-colors ${
-                      sel ? "bg-ink text-paper" : "hover:bg-secondary"
-                    }`}
-                  >
-                    <div className="flex items-baseline gap-3">
-                      <span className="numeral text-2xl">0{i + 1}</span>
-                      <span className="kicker" style={{ color: sel ? "var(--paper)" : undefined }}>
-                        Option {o.id}
-                      </span>
-                    </div>
-                    <div className="mt-3 text-base font-medium">{o.label}</div>
-                    <div className={`mt-1.5 text-sm ${sel ? "" : "text-muted-foreground"}`}>{o.description}</div>
-                    {sel && <div className="absolute right-3 top-3 h-2 w-2 bg-electric" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
 
-function MentorBlock({
-  reactions, loading, hasChoice,
-}: { reactions: Reaction[] | null; loading: boolean; hasChoice: boolean }) {
+function BriefPoint({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="border-t hairline px-8 py-8">
-      <div className="flex items-end justify-between border-b hairline pb-4">
-        <div>
-          <div className="kicker">Mentors / 03</div>
-          <h2 className="mt-2 text-3xl tracking-tight">Adversarial critique</h2>
+    <div>
+      <div className="numeral text-3xl text-electric">{n}</div>
+      <h3 className="mt-2 text-lg font-medium tracking-tight">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+/* ---------- conversation: case (left) + chat (right) ---------- */
+
+function Conversation({ caseText }: { caseText: string }) {
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
+  }, [transcript, thinking]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || thinking) return;
+    const snapshot = transcript; // history = turns BEFORE this message
+    setTranscript((t) => [...t, { kind: "participant", text }]);
+    setInput("");
+    setThinking(true);
+    try {
+      const res = await sendTurn(text, snapshot);
+      const additions: TranscriptEntry[] = [];
+      if (res.note) additions.push({ kind: "note", text: res.note });
+      if (res.analyst?.spoke && res.analyst.answer)
+        additions.push({ kind: "analyst", text: res.analyst.answer, figures: res.analyst.figures ?? [] });
+      for (const c of res.council ?? [])
+        additions.push({ kind: "council", id: c.id, name: c.name, school: c.school, text: c.message });
+      setTranscript((t) => [...t, ...additions]);
+    } catch (e) {
+      toast.error("The room went quiet", { description: String((e as any)?.message ?? e) });
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-0 pt-6 lg:grid-cols-12">
+      {/* CASE — stays visible, sized for projection */}
+      <section className="lg:col-span-5 lg:border-r hairline lg:pr-7">
+        <div className="kicker">The case / 01 · IEDC–Poslovna šola Bled</div>
+        <div className="mt-3 max-h-none lg:max-h-[68vh] lg:overflow-y-auto lg:pr-2">
+          <CaseText text={caseText} />
         </div>
-        <div className="kicker max-w-xs text-right">
-          Four voices, four schools of thought
+      </section>
+
+      {/* CONVERSATION */}
+      <section className="mt-8 lg:col-span-7 lg:mt-0 lg:pl-7">
+        <div className="flex items-center justify-between border-b hairline pb-3">
+          <div className="kicker">The conversation / 02</div>
+          <div className="kicker text-muted-foreground">Talk freely · ask · decide · summon</div>
         </div>
+
+        <div className="space-y-4 py-5">
+          {transcript.length === 0 && !thinking && <EmptyState />}
+          {transcript.map((e, i) => (
+            <TranscriptItem key={i} entry={e} index={i} />
+          ))}
+          {thinking && <Thinking />}
+          <div ref={endRef} />
+        </div>
+
+        <Composer input={input} setInput={setInput} onSend={send} onKeyDown={onKeyDown} thinking={thinking} />
+      </section>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="border hairline p-5">
+      <p className="tagline text-lg">The floor is yours.</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        Read the case on the left, then respond in your own words. Ask for any number or analysis
+        (“show me the three-year financial trend”), state a direction, or address the council
+        (“Operator, how would this actually get built?”).
+      </p>
+    </div>
+  );
+}
+
+function Thinking() {
+  return (
+    <div className="flex items-center gap-2 px-1 text-muted-foreground">
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50" />
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:150ms]" />
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:300ms]" />
+      <span className="kicker ml-1">The room is thinking</span>
+    </div>
+  );
+}
+
+function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: number }) {
+  if (entry.kind === "participant") {
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300 border-l-2 border-ink bg-secondary/60 px-4 py-3">
+        <div className="kicker mb-1">You · in the president's seat</div>
+        <p className="text-[15px] leading-relaxed">{entry.text}</p>
       </div>
+    );
+  }
+  if (entry.kind === "note") {
+    return (
+      <p className="tagline px-1 text-center text-sm text-muted-foreground animate-in fade-in duration-300">
+        {entry.text}
+      </p>
+    );
+  }
+  if (entry.kind === "analyst") {
+    return <AnalystCard text={entry.text} figures={entry.figures} />;
+  }
+  // council
+  const accent = entry.id === "ethicalChallenger";
+  return (
+    <article
+      className="animate-in fade-in slide-in-from-bottom-2 border hairline p-4 md:p-5"
+      style={{ animationDuration: "450ms", animationDelay: `${(index % 5) * 70}ms`, animationFillMode: "both" }}
+    >
+      <div className="flex items-baseline justify-between">
+        <div className="text-lg tracking-tight">
+          {accent && <span className="mr-1.5 text-electric">●</span>}
+          {entry.name}
+        </div>
+        <div className="kicker">{entry.school}</div>
+      </div>
+      <div className="my-2.5 h-0.5 w-7" style={{ background: accent ? "var(--electric)" : "var(--rule)" }} />
+      <p className="text-[15px] leading-relaxed">{entry.text}</p>
+    </article>
+  );
+}
 
-      {!hasChoice && !loading && (
-        <p className="py-10 text-sm text-muted-foreground">Choose an option above to summon the mentors.</p>
-      )}
-
-      {loading && (
-        <div className="grid grid-cols-2 gap-0 border hairline mt-6">
-          {MENTORS.map((m) => (
-            <div key={m.id} className="border-r border-b hairline p-6 last:border-r-0 even:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
-              <div className="kicker">{m.school}</div>
-              <div className="mt-2 text-xl">{m.name}</div>
-              <div className="mt-4 h-3 w-3/4 bg-secondary animate-pulse" />
-              <div className="mt-2 h-3 w-full bg-secondary animate-pulse" />
-              <div className="mt-2 h-3 w-2/3 bg-secondary animate-pulse" />
+function AnalystCard({ text, figures }: { text: string; figures: Figure[] }) {
+  return (
+    <article className="animate-in fade-in slide-in-from-bottom-2 duration-450 border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)] p-4 md:p-5">
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 bg-electric" />
+        <span className="kicker">World / Analyst · from the audited fact-sheet</span>
+      </div>
+      <p className="mt-3 text-[16px] leading-relaxed md:text-[17px]">{text}</p>
+      {figures.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
+          {figures.map((f, i) => (
+            <div key={i} className="bg-card p-3">
+              <div className="kicker text-[9px]">{f.label}</div>
+              <div className="numeral mt-1 text-xl font-medium leading-none md:text-2xl">{f.value}</div>
             </div>
           ))}
         </div>
       )}
+    </article>
+  );
+}
 
-      {reactions && (
-        <div className="grid grid-cols-2 gap-0 border hairline mt-6">
-          {MENTORS.map((m, i) => {
-            const r = reactions.find((x) => x.id === m.id);
-            if (!r) return null;
-            return (
-              <article key={m.id} className={`relative p-6 ${i % 2 === 0 ? "border-r hairline" : ""} ${i < 2 ? "border-b hairline" : ""}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="kicker">{m.school}</div>
-                    <div className="mt-1 text-xl tracking-tight">{m.name}</div>
-                  </div>
-                  <span className="numeral text-2xl text-muted-foreground">0{i + 1}</span>
-                </div>
-                <div className="mt-4 h-px bg-electric w-8" />
-                <p className="mt-4 text-base font-medium leading-snug">{r.headline}</p>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{r.critique}</p>
-                <div className="mt-4 border-t hairline pt-3">
-                  <span className="kicker">Probe</span>
-                  <p className="mt-1 text-sm italic">{r.probe}</p>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
+function Composer({
+  input,
+  setInput,
+  onSend,
+  onKeyDown,
+  thinking,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  thinking: boolean;
+}) {
+  return (
+    <div className="sticky bottom-0 border-t hairline bg-card pt-4">
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={onKeyDown}
+        rows={2}
+        placeholder="Ask for a number, state a direction, or address a mentor…"
+        className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
+      />
+      <div className="mt-2.5 flex items-center justify-between pb-1">
+        <span className="kicker">Enter to send · Shift+Enter for a new line</span>
+        <button
+          onClick={onSend}
+          disabled={thinking || !input.trim()}
+          className="bg-electric px-6 py-2.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {thinking ? "…" : "Send →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Lightweight markdown renderer for the case text (headings, lists, bold, rules). */
+function CaseText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const out: React.ReactNode[] = [];
+  let list: string[] = [];
+
+  const flushList = (key: string) => {
+    if (!list.length) return;
+    out.push(
+      <ol key={key} className="mt-2 space-y-2.5">
+        {list.map((item, i) => (
+          <li key={i} className="flex gap-3 text-[16px] leading-relaxed md:text-[17px]">
+            <span className="numeral text-xl text-electric">{i + 1}</span>
+            <span>{renderInline(item.replace(/^\d+\.\s*/, ""))}</span>
+          </li>
+        ))}
+      </ol>
+    );
+    list = [];
+  };
+
+  lines.forEach((raw, i) => {
+    const line = raw.trimEnd();
+    if (/^\d+\.\s/.test(line)) {
+      list.push(line);
+      return;
+    }
+    flushList(`ol-${i}`);
+    if (!line.trim()) return;
+    if (line.startsWith("### ")) {
+      out.push(
+        <h3 key={i} className="kicker mt-6 text-[11px] first:mt-0">
+          {line.slice(4)}
+        </h3>
+      );
+    } else if (line.startsWith("---")) {
+      out.push(<div key={i} className="my-5 h-px bg-[var(--rule)]" />);
+    } else {
+      out.push(
+        <p key={i} className="mt-3 text-[16px] leading-relaxed md:text-[17px]">
+          {renderInline(line)}
+        </p>
+      );
+    }
+  });
+  flushList("ol-end");
+  return <div>{out}</div>;
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**") ? (
+      <strong key={i} className="font-semibold text-ink">
+        {p.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={i}>{p}</span>
+    )
   );
 }
