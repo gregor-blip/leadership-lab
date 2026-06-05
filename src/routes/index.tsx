@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { MENTORS } from "@/lib/simulator-data";
-import { getCase } from "@/lib/simulator-client";
+import { MENTORS, type TranscriptEntry, type Figure } from "@/lib/simulator-data";
+import { getCase, sendTurn } from "@/lib/simulator-client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,7 +48,7 @@ function App() {
           {phase === "onboarding" ? (
             <OnboardingBrief loading={loadingCase} onBegin={begin} />
           ) : (
-            <ConversationStub caseText={caseText} />
+            <Conversation caseText={caseText} />
           )}
         </AppChrome>
         <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -170,19 +170,202 @@ function BriefPoint({ n, title, children }: { n: string; title: string; children
   );
 }
 
-/* ---------- conversation (minimal stub — built out next) ---------- */
+/* ---------- conversation: case (left) + chat (right) ---------- */
 
-function ConversationStub({ caseText }: { caseText: string }) {
+function Conversation({ caseText }: { caseText: string }) {
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
+  }, [transcript, thinking]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || thinking) return;
+    const snapshot = transcript; // history = turns BEFORE this message
+    setTranscript((t) => [...t, { kind: "participant", text }]);
+    setInput("");
+    setThinking(true);
+    try {
+      const res = await sendTurn(text, snapshot);
+      const additions: TranscriptEntry[] = [];
+      if (res.note) additions.push({ kind: "note", text: res.note });
+      if (res.analyst?.spoke && res.analyst.answer)
+        additions.push({ kind: "analyst", text: res.analyst.answer, figures: res.analyst.figures ?? [] });
+      for (const c of res.council ?? [])
+        additions.push({ kind: "council", id: c.id, name: c.name, school: c.school, text: c.message });
+      setTranscript((t) => [...t, ...additions]);
+    } catch (e) {
+      toast.error("The room went quiet", { description: String((e as any)?.message ?? e) });
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  }
+
   return (
-    <section className="pt-7">
-      <div className="kicker">The case / 01</div>
-      <div className="mt-3 max-w-3xl">
-        <CaseText text={caseText} />
+    <div className="grid grid-cols-1 gap-0 pt-6 lg:grid-cols-12">
+      {/* CASE — stays visible, sized for projection */}
+      <section className="lg:col-span-5 lg:border-r hairline lg:pr-7">
+        <div className="kicker">The case / 01 · IEDC–Poslovna šola Bled</div>
+        <div className="mt-3 max-h-none lg:max-h-[68vh] lg:overflow-y-auto lg:pr-2">
+          <CaseText text={caseText} />
+        </div>
+      </section>
+
+      {/* CONVERSATION */}
+      <section className="mt-8 lg:col-span-7 lg:mt-0 lg:pl-7">
+        <div className="flex items-center justify-between border-b hairline pb-3">
+          <div className="kicker">The conversation / 02</div>
+          <div className="kicker text-muted-foreground">Talk freely · ask · decide · summon</div>
+        </div>
+
+        <div className="space-y-4 py-5">
+          {transcript.length === 0 && !thinking && <EmptyState />}
+          {transcript.map((e, i) => (
+            <TranscriptItem key={i} entry={e} index={i} />
+          ))}
+          {thinking && <Thinking />}
+          <div ref={endRef} />
+        </div>
+
+        <Composer input={input} setInput={setInput} onSend={send} onKeyDown={onKeyDown} thinking={thinking} />
+      </section>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="border hairline p-5">
+      <p className="tagline text-lg">The floor is yours.</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        Read the case on the left, then respond in your own words. Ask for any number or analysis
+        (“show me the three-year financial trend”), state a direction, or address the council
+        (“Operator, how would this actually get built?”).
+      </p>
+    </div>
+  );
+}
+
+function Thinking() {
+  return (
+    <div className="flex items-center gap-2 px-1 text-muted-foreground">
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50" />
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:150ms]" />
+      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:300ms]" />
+      <span className="kicker ml-1">The room is thinking</span>
+    </div>
+  );
+}
+
+function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: number }) {
+  if (entry.kind === "participant") {
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300 border-l-2 border-ink bg-secondary/60 px-4 py-3">
+        <div className="kicker mb-1">You · in the president's seat</div>
+        <p className="text-[15px] leading-relaxed">{entry.text}</p>
       </div>
-      <div className="mt-8 border-t hairline pt-5">
-        <p className="kicker">Conversation — building next</p>
+    );
+  }
+  if (entry.kind === "note") {
+    return (
+      <p className="tagline px-1 text-center text-sm text-muted-foreground animate-in fade-in duration-300">
+        {entry.text}
+      </p>
+    );
+  }
+  if (entry.kind === "analyst") {
+    return <AnalystCard text={entry.text} figures={entry.figures} />;
+  }
+  // council
+  const accent = entry.id === "ethicalChallenger";
+  return (
+    <article
+      className="animate-in fade-in slide-in-from-bottom-2 border hairline p-4 md:p-5"
+      style={{ animationDuration: "450ms", animationDelay: `${(index % 5) * 70}ms`, animationFillMode: "both" }}
+    >
+      <div className="flex items-baseline justify-between">
+        <div className="text-lg tracking-tight">
+          {accent && <span className="mr-1.5 text-electric">●</span>}
+          {entry.name}
+        </div>
+        <div className="kicker">{entry.school}</div>
       </div>
-    </section>
+      <div className="my-2.5 h-0.5 w-7" style={{ background: accent ? "var(--electric)" : "var(--rule)" }} />
+      <p className="text-[15px] leading-relaxed">{entry.text}</p>
+    </article>
+  );
+}
+
+function AnalystCard({ text, figures }: { text: string; figures: Figure[] }) {
+  return (
+    <article className="animate-in fade-in slide-in-from-bottom-2 duration-450 border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)] p-4 md:p-5">
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 bg-electric" />
+        <span className="kicker">World / Analyst · from the audited fact-sheet</span>
+      </div>
+      <p className="mt-3 text-[16px] leading-relaxed md:text-[17px]">{text}</p>
+      {figures.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
+          {figures.map((f, i) => (
+            <div key={i} className="bg-card p-3">
+              <div className="kicker text-[9px]">{f.label}</div>
+              <div className="numeral mt-1 text-xl font-medium leading-none md:text-2xl">{f.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function Composer({
+  input,
+  setInput,
+  onSend,
+  onKeyDown,
+  thinking,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  thinking: boolean;
+}) {
+  return (
+    <div className="sticky bottom-0 border-t hairline bg-card pt-4">
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={onKeyDown}
+        rows={2}
+        placeholder="Ask for a number, state a direction, or address a mentor…"
+        className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
+      />
+      <div className="mt-2.5 flex items-center justify-between pb-1">
+        <span className="kicker">Enter to send · Shift+Enter for a new line</span>
+        <button
+          onClick={onSend}
+          disabled={thinking || !input.trim()}
+          className="bg-electric px-6 py-2.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {thinking ? "…" : "Send →"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -195,10 +378,10 @@ function CaseText({ text }: { text: string }) {
   const flushList = (key: string) => {
     if (!list.length) return;
     out.push(
-      <ol key={key} className="mt-2 space-y-2">
+      <ol key={key} className="mt-2 space-y-2.5">
         {list.map((item, i) => (
-          <li key={i} className="flex gap-3 text-[15px] leading-relaxed">
-            <span className="numeral text-electric">{i + 1}</span>
+          <li key={i} className="flex gap-3 text-[16px] leading-relaxed md:text-[17px]">
+            <span className="numeral text-xl text-electric">{i + 1}</span>
             <span>{renderInline(item.replace(/^\d+\.\s*/, ""))}</span>
           </li>
         ))}
@@ -217,7 +400,7 @@ function CaseText({ text }: { text: string }) {
     if (!line.trim()) return;
     if (line.startsWith("### ")) {
       out.push(
-        <h3 key={i} className="kicker mt-6 first:mt-0">
+        <h3 key={i} className="kicker mt-6 text-[11px] first:mt-0">
           {line.slice(4)}
         </h3>
       );
@@ -225,7 +408,7 @@ function CaseText({ text }: { text: string }) {
       out.push(<div key={i} className="my-5 h-px bg-[var(--rule)]" />);
     } else {
       out.push(
-        <p key={i} className="mt-3 text-[15px] leading-relaxed">
+        <p key={i} className="mt-3 text-[16px] leading-relaxed md:text-[17px]">
           {renderInline(line)}
         </p>
       );
