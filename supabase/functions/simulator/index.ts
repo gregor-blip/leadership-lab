@@ -49,9 +49,9 @@ ATTACK: Treating people as line items, hiding a cost onto employees or community
 VOICE: Steady, principled, humane but unflinching. Asks the question the room is avoiding.`,
 };
 
-// Who the participant is. They sit in the dean's seat — not a generic student.
+// Who the participant is. They sit in the president's seat — the decision-maker.
 const PARTICIPANT_IDENTITY =
-  "an IEDC graduate and senior operator who knows the school's situation intimately, now acting as the decision-maker in the president's seat (the dean's seat)";
+  "a senior operator sitting in the president's seat at IEDC, acting as the decision-maker";
 
 // The case the participant reads on screen (markdown). Returned by the `case` action.
 const CASE_TEXT = `### Opening
@@ -167,13 +167,24 @@ const MENTOR_ROSTER = MENTOR_META.map(
 
 // Orchestrator system prompt for the live conversation. Assembled once from the
 // verbatim charter + five lenses + the case + the authoritative fact-sheet.
-const TURN_SYSTEM = `You are the live intelligence behind "IEDC Leadership Lab", an AI-native MBA case experience. You run ONE fixed case as a Socratic conversation — not a quiz. There is no score and no single right answer. Every turn you do TWO jobs:
+const TURN_SYSTEM = `You are the live intelligence behind "IEDC Leadership Lab", an AI-native MBA case experience. You run ONE fixed case as a Socratic conversation — not a quiz. There is no score and no single right answer.
 
-1) THE WORLD / ANALYST. Answer the participant's factual and analytical questions about the case using ONLY the FACT-SHEET below. Run whatever analysis they ask for — trends, gaps, ratios, comparisons — directly from these numbers, and read the result back plainly and decisively, like an analyst who just ran it. NEVER invent, round beyond the data, or estimate a figure that is not in or derivable from the fact-sheet. If a number genuinely isn't there, say you don't have that figure rather than fabricating it.
+YOUR DEFAULT IS A SINGLE VOICE. By default you respond as ONE voice — the facilitator/analyst. One message from the participant gets ONE direct reply, like a real conversation. The council of five mentors stays SILENT unless the participant summons it (see below). Do NOT convene the council on an ordinary turn.
 
-2) THE COUNCIL. Five mentor archetypes (defined below) advise the participant. They speak in their own distinct voices, they DISAGREE — with the participant and with each other — and they respond to being summoned, pushed, or dismissed. Do NOT make all five speak every turn: only the mentors who are relevant to this turn speak. If the participant addresses or summons specific mentors, those speak. If the participant tells a mentor to stay quiet or dismisses one, that mentor does NOT speak this turn (note it briefly). On the core strategic decision (the three doors) the council should genuinely clash about HOW FAST to move and WHAT TO SACRIFICE.
+1) THE FACILITATOR / ANALYST (your default voice — always present).
+- When the participant asks for facts or analysis, answer using ONLY the FACT-SHEET below. Run whatever they ask — trends, gaps, ratios, comparisons — directly from these numbers and read the result back plainly and decisively, like an analyst who just ran it. NEVER invent, round beyond the data, or estimate a figure that is not in or derivable from the fact-sheet. If a number genuinely isn't there, say you don't have that figure rather than fabricating it. Put any specific numbers you cite in "figures".
+- Otherwise, respond as a sharp facilitator/world voice: engage the participant's point directly, reflect it back, and move the conversation forward with at most one focused question. Stay in ONE voice — do not impersonate the mentors.
 
-THE PARTICIPANT sits in the dean's seat: ${PARTICIPANT_IDENTITY}. Address them as the decision-maker, never as a student to be lectured.
+2) THE COUNCIL (on tap — silent by default). Five mentor archetypes (defined below) advise the participant. They speak ONLY when summoned, by EITHER:
+   (a) an explicit SUMMON DIRECTIVE provided with the turn, OR
+   (b) clear natural-language intent in the participant's message — e.g. "council, weigh in", "what would the Contrarian say", "push back on this", "tear this apart", "challenge me", "bring in the council".
+If neither is present, "council" MUST be []. When summoned:
+- Default to the 1–2 MOST RELEVANT mentors — not all five.
+- If the participant names specific mentors, ONLY those speak.
+- Bring in ALL FIVE only when explicitly asked ("all five", "the full council", "everyone") or directed to. When all five speak, they MUST genuinely disagree — split on HOW FAST to move and WHAT to sacrifice, and rebut each other by name. Do NOT return five parallel, agreeable takes; find the real fault line and voice it.
+- If the participant tells a mentor to stay quiet or dismisses one, that mentor does NOT speak (note it briefly in "note").
+
+THE PARTICIPANT is ${PARTICIPANT_IDENTITY}. Address them as the decision-maker, never as a student to be lectured.
 
 PROHIBITED: fabricating quotes from, or role-playing AS, real people (Omazić, Purg, Orešković). Refer to them only as factual roles. The five mentors are archetypes and are NEVER real named people.
 
@@ -192,24 +203,22 @@ ${MENTOR_ROSTER}
 === OUTPUT ===
 Return STRICT JSON and nothing else, in exactly this shape:
 {
-  "analyst": {
-    "spoke": true | false,
-    "answer": "plain-language analyst response grounded ONLY in the fact-sheet, or \"\" if no data/analysis was requested",
+  "reply": {
+    "text": "your single-voice facilitator/analyst response to this turn (always present)",
     "figures": [ { "label": "e.g. 2024 net loss", "value": "e.g. -€190,705" } ]
   },
   "council": [
     { "id": "disruptor | operator | contrarian | systemsThinker | ethicalChallenger", "message": "in-voice, 2-4 sentences; may name and rebut another mentor by name" }
   ],
-  "note": "optional ONE short line — a world/stage note, e.g. acknowledging a mentor was summoned or told to stay quiet; \"\" if none"
+  "note": "optional ONE short line — a stage note, e.g. acknowledging a mentor was summoned or told to stay quiet; \"\" if none"
 }
 
 RULES:
-- analyst.spoke = true ONLY when the turn asks for facts or analysis; otherwise spoke=false and answer="".
-- figures: list the specific numbers you cited; [] if none.
+- "reply.text" is ALWAYS present — it is your single default voice for the turn.
+- figures: list the specific fact-sheet numbers you cited; [] if none.
 - FACT-SHEET INTEGRITY: if asked for a figure that is not in and not derivable from the fact-sheet (e.g. marketing budget, cost per student, headcount by team, churn), say plainly that you do not have that figure and offer what IS on the sheet. NEVER estimate, guess, or fabricate a number.
-- council: include only the relevant or summoned mentors, ordered by relevance. At least one mentor speaks UNLESS the turn is a pure data request with no decision content (then council may be []).
-- COUNCIL DISAGREEMENT: on the three-door strategic decision the mentors MUST openly clash — at least two should name another mentor and push back on them, and they should split on HOW FAST to move and WHAT to sacrifice. Do NOT return five parallel, agreeable takes; if they would all agree, find the real fault line and voice it.
-- Keep each mentor message tight and unmistakably in its own voice; let them disagree openly.
+- COUNCIL DEFAULT IS SILENCE: "council" is [] unless this turn summons it. When summoned, default to 1–2 relevant mentors; only all five when explicitly asked, and then they MUST clash.
+- Keep each mentor message tight and unmistakably in its own voice.
 - English only.`;
 
 async function callAnthropic(system: string, user: string, maxTokens = 1500): Promise<string> {
@@ -244,7 +253,7 @@ function extractJson(text: string): any {
 }
 
 // Render the conversation so far for the orchestrator. `history` is a flat list
-// of prior turns: { role: "participant" | "analyst" | "council", name?, text }.
+// of prior turns: { role: "participant" | "facilitator" | "council", name?, text }.
 function formatTranscript(history: any[]): string {
   if (!Array.isArray(history) || history.length === 0) return "(this is the first turn)";
   return history
@@ -252,7 +261,7 @@ function formatTranscript(history: any[]): string {
       const text = String(m?.text ?? "").trim();
       if (!text) return "";
       if (m.role === "participant") return `PARTICIPANT: ${text}`;
-      if (m.role === "analyst") return `ANALYST: ${text}`;
+      if (m.role === "facilitator" || m.role === "analyst") return `FACILITATOR: ${text}`;
       if (m.role === "council") return `${m.name ?? "MENTOR"}: ${text}`;
       return "";
     })
@@ -290,21 +299,39 @@ Deno.serve(async (req) => {
       return json({ caseText: CASE_TEXT });
     }
 
-    // The live conversation turn: analyst (fact-sheet) + council (mentors).
+    // The live conversation turn: single facilitator voice by default; the
+    // council speaks only when summoned (explicit directive or natural language).
     if (action === "turn") {
       const message = String(body.message ?? "").trim();
       if (!message) return json({ error: "empty message" }, 400);
+
+      const summon = body.summon; // undefined | "auto" | "all" | <mentorId>
+      let directive: string;
+      const named = typeof summon === "string" ? MENTOR_META.find((m) => m.id === summon) : null;
+      if (summon === "all") {
+        directive =
+          "SUMMON DIRECTIVE: The participant has summoned the FULL COUNCIL. ALL FIVE mentors must speak AND genuinely disagree with each other — split on how fast to move and what to sacrifice, and rebut each other by name. Do not harmonize.";
+      } else if (summon === "auto") {
+        directive =
+          "SUMMON DIRECTIVE: The participant has summoned the council. Bring in ONLY the 1–2 MOST RELEVANT mentors to this turn — not all five.";
+      } else if (named) {
+        directive = `SUMMON DIRECTIVE: The participant has summoned ONLY ${named.name}. The "council" array must contain exactly that one mentor.`;
+      } else {
+        directive =
+          "No explicit summon directive. The council speaks ONLY if the participant's message clearly summons it in natural language; otherwise \"council\" MUST be [].";
+      }
+
       const user =
         `CONVERSATION SO FAR:\n${formatTranscript(body.history)}\n\n` +
+        `${directive}\n\n` +
         `PARTICIPANT (this turn): ${message}\n\n` +
-        `Respond now as analyst + council, following the OUTPUT schema exactly.`;
+        `Respond now following the OUTPUT schema exactly.`;
       const text = await callAnthropic(TURN_SYSTEM, user, 2400);
       const parsed = extractJson(text);
       return json({
-        analyst: {
-          spoke: !!parsed?.analyst?.spoke,
-          answer: String(parsed?.analyst?.answer ?? ""),
-          figures: Array.isArray(parsed?.analyst?.figures) ? parsed.analyst.figures : [],
+        reply: {
+          text: String(parsed?.reply?.text ?? ""),
+          figures: Array.isArray(parsed?.reply?.figures) ? parsed.reply.figures : [],
         },
         council: decorateCouncil(parsed?.council),
         note: String(parsed?.note ?? ""),

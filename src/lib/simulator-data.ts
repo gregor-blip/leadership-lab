@@ -42,28 +42,34 @@ export const MENTORS: Mentor[] = [
 // ---- Conversation payloads (mirror the Edge Function `turn` response) ----
 export type Figure = { label: string; value: string };
 
-export type AnalystAnswer = { spoke: boolean; answer: string; figures: Figure[] };
+// The single default voice (facilitator/analyst). figures present only when it
+// cites fact-sheet numbers.
+export type Reply = { text: string; figures: Figure[] };
 
 export type CouncilMessage = { id: string; name: string; school: string; message: string };
 
-export type TurnResponse = { analyst: AnalystAnswer; council: CouncilMessage[]; note: string };
+export type TurnResponse = { reply: Reply; council: CouncilMessage[]; note: string };
+
+// How the council is summoned. Omitted = not summoned (single-voice turn).
+//   "auto" = bring 1-2 relevant mentors · "all" = full council · <mentorId> = just that one
+export type Summon = "auto" | "all" | string;
 
 // ---- Transcript (flat, in-memory). `note` entries are display-only and are
 // NOT sent back to the model as history. ----
 export type TranscriptEntry =
   | { kind: "participant"; text: string }
-  | { kind: "analyst"; text: string; figures: Figure[] }
+  | { kind: "facilitator"; text: string; figures: Figure[] }
   | { kind: "council"; id: string; name: string; school: string; text: string }
   | { kind: "note"; text: string };
 
 // Build the history contract the Edge Function expects:
-//   [{ role: "participant" | "analyst" | "council", name?, text }]
+//   [{ role: "participant" | "facilitator" | "council", name?, text }]
 export function toHistory(transcript: TranscriptEntry[]) {
   return transcript
     .filter((e) => e.kind !== "note")
     .map((e) => {
       if (e.kind === "participant") return { role: "participant", text: e.text };
-      if (e.kind === "analyst") return { role: "analyst", text: e.text };
+      if (e.kind === "facilitator") return { role: "facilitator", text: e.text };
       return { role: "council", name: (e as any).name, text: (e as any).text };
     });
 }
