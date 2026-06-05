@@ -206,7 +206,9 @@ Return STRICT JSON and nothing else, in exactly this shape:
 RULES:
 - analyst.spoke = true ONLY when the turn asks for facts or analysis; otherwise spoke=false and answer="".
 - figures: list the specific numbers you cited; [] if none.
+- FACT-SHEET INTEGRITY: if asked for a figure that is not in and not derivable from the fact-sheet (e.g. marketing budget, cost per student, headcount by team, churn), say plainly that you do not have that figure and offer what IS on the sheet. NEVER estimate, guess, or fabricate a number.
 - council: include only the relevant or summoned mentors, ordered by relevance. At least one mentor speaks UNLESS the turn is a pure data request with no decision content (then council may be []).
+- COUNCIL DISAGREEMENT: on the three-door strategic decision the mentors MUST openly clash — at least two should name another mentor and push back on them, and they should split on HOW FAST to move and WHAT to sacrifice. Do NOT return five parallel, agreeable takes; if they would all agree, find the real fault line and voice it.
 - Keep each mentor message tight and unmistakably in its own voice; let them disagree openly.
 - English only.`;
 

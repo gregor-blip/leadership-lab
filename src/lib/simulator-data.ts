@@ -1,123 +1,69 @@
-export type Profile = {
-  professional: {
-    region: string;
-    age: number;
-    companyType: string;
-    sector: string;
-    role: string;
-    yearsExperience: number;
-    ambition: string;
-    situation: string;
-  };
-  psychological: {
-    riskAppetite: number;
-    decisiveness: number;
-    conflictStyle: number;
-    needForControl: number;
-    opennessToDissent: number;
-    ethicalAnchoring: number;
-  };
-};
+// ---- Mentors (names ARE their personalities). ids match the Edge Function. ----
+export type Mentor = { id: string; name: string; school: string; blurb: string };
 
-// Seed learner: Marko (see brief). Rich, specific, and EDITABLE — editing it
-// changes the next generated scenario, which is the key demo moment.
-export const DEFAULT_PROFILE: Profile = {
-  professional: {
-    region: "Slovenia (Central Europe)",
-    age: 40,
-    companyType: "Family-owned industrial exporter (~€120M revenue)",
-    sector: "Industrial manufacturing / export",
-    role: "Senior Operations Director",
-    yearsExperience: 12,
-    ambition: "Become CEO within 3 years",
-    situation:
-      "The founder still walks the floor and second-guesses management. A German competitor just undercut us with an AI-automated plant. Our best engineers are being poached. Marko is strong analytically but conflict-avoidant — especially toward the founder — has a high need to be liked, and tends to stay silent rather than challenge authority.",
+export const MENTORS: Mentor[] = [
+  {
+    id: "disruptor",
+    name: "The Disruptor",
+    school: "Disruptive innovation",
+    blurb:
+      "Sees the cheaper, simpler threat coming from underneath — and doesn't care whether you think it applies to you.",
   },
-  psychological: {
-    riskAppetite: 42,
-    decisiveness: 55,
-    conflictStyle: 22,
-    needForControl: 61,
-    opennessToDissent: 38,
-    ethicalAnchoring: 70,
+  {
+    id: "operator",
+    name: "The Operator",
+    school: "Execution & operations",
+    blurb:
+      "Turns every idea into who-does-what-by-when. Allergic to vision without a mechanism.",
   },
-};
+  {
+    id: "contrarian",
+    name: "The Contrarian",
+    school: "Behavioral economics & cognitive bias",
+    blurb:
+      "Hunts the bias hiding in your confidence, and asks what evidence would actually change your mind.",
+  },
+  {
+    id: "systemsThinker",
+    name: "The Systems-Thinker",
+    school: "Systems thinking",
+    blurb:
+      "Watches the feedback loops and the delays, and shows you the second- and third-order effects you missed.",
+  },
+  {
+    id: "ethicalChallenger",
+    name: "The Ethical Challenger",
+    school: "Stakeholder ethics",
+    blurb:
+      "Asks who bears the cost that wasn't in the room — and whether the decision would survive the front page.",
+  },
+];
 
-export const PSY_LABELS: Record<keyof Profile["psychological"], [string, string]> = {
-  riskAppetite: ["Risk-averse", "Risk-seeking"],
-  decisiveness: ["Deliberative", "Decisive"],
-  conflictStyle: ["Accommodating", "Confrontational"],
-  needForControl: ["Delegative", "Controlling"],
-  opennessToDissent: ["Closed", "Open to dissent"],
-  ethicalAnchoring: ["Pragmatic", "Principled"],
-};
+// ---- Conversation payloads (mirror the Edge Function `turn` response) ----
+export type Figure = { label: string; value: string };
 
-// The five discipline mentors. ids MUST match MENTOR_META in the Edge Function.
-export const MENTORS = [
-  { id: "disruptor", name: "The Disruptor", school: "Disruptive innovation" },
-  { id: "operator", name: "The Operator", school: "Execution & operations" },
-  { id: "contrarian", name: "The Contrarian", school: "Behavioral economics & cognitive bias" },
-  { id: "systemsThinker", name: "The Systems-Thinker", school: "Systems thinking" },
-  { id: "ethicalChallenger", name: "The Ethical Challenger", school: "Stakeholder ethics" },
-] as const;
+export type AnalystAnswer = { spoke: boolean; answer: string; figures: Figure[] };
 
-// The four situation meters, canonical order. Mirrors the Edge Function prompts.
-export const METERS = [
-  { key: "founderConfidence", label: "Founder Confidence" },
-  { key: "cashRunway", label: "Cash Runway" },
-  { key: "teamMorale", label: "Team Morale" },
-  { key: "marketPosition", label: "Market Position" },
-] as const;
+export type CouncilMessage = { id: string; name: string; school: string; message: string };
 
-export type MeterKey = (typeof METERS)[number]["key"];
+export type TurnResponse = { analyst: AnalystAnswer; council: CouncilMessage[]; note: string };
 
-export const CONSENT_LINE =
-  "Built from 2 completed assessments + your interactions — with your consent.";
+// ---- Transcript (flat, in-memory). `note` entries are display-only and are
+// NOT sent back to the model as history. ----
+export type TranscriptEntry =
+  | { kind: "participant"; text: string }
+  | { kind: "analyst"; text: string; figures: Figure[] }
+  | { kind: "council"; id: string; name: string; school: string; text: string }
+  | { kind: "note"; text: string };
 
-export const TOTAL_ROUNDS = 3;
-
-export type SuggestedMove = { label: string; description: string };
-
-// From the Edge Function: round 1 carries `value`; resolve carries `delta`.
-export type MeterPayload = { key: MeterKey; value?: number; delta?: number; reason?: string };
-
-export type Scenario = {
-  title: string;
-  context: string;
-  dilemma: string;
-  stakes: string[];
-  suggestedMoves: SuggestedMove[];
-  meters?: MeterPayload[];
-};
-
-export type Reaction = {
-  id: string;
-  name: string;
-  school: string;
-  headline: string;
-  critique: string;
-  probe: string;
-};
-
-export type ResolveResult = {
-  consequence: string;
-  meters: MeterPayload[];
-  reactions: Reaction[];
-};
-
-export type Wrapup = {
-  title: string;
-  summary: string;
-  takeaways: string[];
-};
-
-// Running meter state held in the client.
-export type MeterState = { key: MeterKey; label: string; value: number; reason: string };
-
-export type HistoryEntry = {
-  scenario: Scenario;
-  decision: string;
-  consequence: string;
-};
-
-export const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+// Build the history contract the Edge Function expects:
+//   [{ role: "participant" | "analyst" | "council", name?, text }]
+export function toHistory(transcript: TranscriptEntry[]) {
+  return transcript
+    .filter((e) => e.kind !== "note")
+    .map((e) => {
+      if (e.kind === "participant") return { role: "participant", text: e.text };
+      if (e.kind === "analyst") return { role: "analyst", text: e.text };
+      return { role: "council", name: (e as any).name, text: (e as any).text };
+    });
+}
