@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -32,33 +33,37 @@
   --color-paper: var(--paper);
   --color-rule: var(--rule);
   --color-electric: var(--electric);
+  --color-gold: var(--electric);
   --font-display: "Inter Tight", "Helvetica Neue", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 :root {
   --radius: 0;
-  --paper: oklch(0.985 0.004 90);
-  --ink: oklch(0.16 0.01 270);
-  --rule: oklch(0.86 0.005 270);
-  --electric: oklch(0.62 0.24 28);
+
+  /* IEDC-Bled palette: cream surface, warm charcoal-brown ink, golden-yellow accent */
+  --paper: oklch(0.974 0.013 83);     /* warm off-white / cream surface */
+  --ink: oklch(0.235 0.022 60);       /* warm charcoal-brown — the "human" colour */
+  --rule: oklch(0.87 0.014 72);       /* hairline, warm light brown-grey */
+  --electric: oklch(0.80 0.155 84);   /* IEDC golden yellow — ignites only at key moments */
 
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(1 0 0);
+  --card: oklch(0.992 0.006 85);      /* warm near-white inset */
   --card-foreground: var(--ink);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.992 0.006 85);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
-  --secondary: oklch(0.95 0.004 90);
+  --secondary: oklch(0.945 0.013 80); /* warm cream-grey */
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.95 0.004 90);
-  --muted-foreground: oklch(0.45 0.01 270);
+  --muted: oklch(0.945 0.013 80);
+  --muted-foreground: oklch(0.50 0.022 60); /* warm mid-brown */
   --accent: var(--electric);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.55 0.22 27);
-  --destructive-foreground: oklch(1 0 0);
+  --accent-foreground: var(--ink);    /* charcoal-brown text on gold reads cleanly */
+  --destructive: oklch(0.52 0.18 32);
+  --destructive-foreground: oklch(0.99 0.005 85);
   --border: var(--rule);
   --input: var(--rule);
   --ring: var(--ink);
@@ -74,3 +79,17 @@ body {
 .numeral { font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
 .hairline { border-color: var(--rule); }
 .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); opacity: 0.6; }
+
+/* Serif-italic accent — echoes IEDC's "A School with a View" tagline voice. */
+.serif { font-family: var(--font-serif); }
+.tagline { font-family: var(--font-serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+
+/* Respect reduced-motion across the whole app. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

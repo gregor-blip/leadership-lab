@@ -49,49 +49,83 @@ ATTACK: Treating people as line items, hiding a cost onto employees or community
 VOICE: Steady, principled, humane but unflinching. Asks the question the room is avoiding.`,
 };
 
-const SCENARIO_SYSTEM = `You are the scenario engine for an AI Leadership Simulator used by graduate management students. Generate a single, tightly-scoped leadership dilemma calibrated to the learner profile provided.
+const SCENARIO_SYSTEM = `You are the scenario engine for a PERSONALIZED AI executive-leadership simulator. Every scenario is generated for ONE specific learner, conditioned on their profile (professional context + psychological profile and stated blind spots). Two different profiles MUST produce visibly different scenarios — the personalization is the whole point.
 
-Return STRICT JSON with this shape and nothing else:
+Write in the SECOND PERSON ("You are..."). Ground every detail in the learner's region, sector, company type, role, seniority, ambition, and psychology. Avoid clichés and generic business-school filler. End at a real decision point.
+
+The simulation tracks four situation meters (0-100): Founder Confidence, Cash Runway, Team Morale, Market Position.
+
+Return STRICT JSON and nothing else:
 {
-  "title": "string, <= 60 chars",
-  "context": "2-3 sentences setting the situation",
+  "title": "<= 60 chars",
+  "context": "2-3 sentences setting the situation, second person",
   "dilemma": "1-2 sentences naming the tension the learner must resolve",
-  "stakes": ["3 short bullet phrases of what is at risk"],
-  "options": [
-    { "id": "A", "label": "short label", "description": "one sentence" },
-    { "id": "B", "label": "short label", "description": "one sentence" },
-    { "id": "C", "label": "short label", "description": "one sentence" }
+  "stakes": ["3 short phrases of what is at risk"],
+  "suggestedMoves": [
+    { "label": "short label", "description": "one sentence — a plausible move this learner might make" }
+  ],
+  "meters": [
+    { "key": "founderConfidence", "value": 0-100, "reason": "one line" },
+    { "key": "cashRunway", "value": 0-100, "reason": "one line" },
+    { "key": "teamMorale", "value": 0-100, "reason": "one line" },
+    { "key": "marketPosition", "value": 0-100, "reason": "one line" }
   ]
 }
 
-The scenario must be grounded in the learner's region, sector, company type, role, and seniority. Avoid clichés.`;
+Rules:
+- suggestedMoves: provide 2 OR 3, distinct in posture (not variations of the same move). They seed the learner's free-text response; they are not the only options.
+- meters: include all four ONLY when told this is round 1. For later rounds, OMIT the "meters" field entirely — the running meters carry over.`;
 
-const MENTORS = [
-  { id: "drucker", name: "The Strategist", school: "Druckerian management — objectives, customer, contribution", voice: "measured, structural, focused on outcomes and accountability" },
-  { id: "machiavelli", name: "The Realist", school: "Power and political realism", voice: "cold, tactical, focused on coalitions, leverage, and what survives contact with rivals" },
-  { id: "sen", name: "The Ethicist", school: "Capabilities approach and stakeholder ethics", voice: "principled, dignified, focused on whose interests are silently traded away" },
-  { id: "taleb", name: "The Skeptic", school: "Risk, fragility, optionality", voice: "blunt, contrarian, hunts hidden tail risks and false confidence" },
-];
+const CONSEQUENCE_SYSTEM = `You are the consequence engine for a personalized AI executive-leadership simulator. Given a scenario, the learner's FREE-TEXT decision, their profile, and the current meter values, write what realistically happens next and how the four meters move.
 
-const MENTOR_SYSTEM = `You are four adversarial sparring partners critiquing a learner's decision in an AI Leadership Simulator. You are NOT real individuals — you are stylized voices grounded in distinct schools of management thought.
+Write the consequence in the SECOND PERSON, concrete and specific to THIS decision and THIS learner. No platitudes.
 
-Given the scenario, the learner's profile (professional + psychological), and the option they chose, return STRICT JSON:
+The four meters (0-100): Founder Confidence, Cash Runway, Team Morale, Market Position.
+
+Return STRICT JSON and nothing else:
 {
-  "reactions": [
-    { "id": "drucker",     "headline": "one sharp sentence", "critique": "2-3 sentences naming a specific blind spot tied to the learner's profile", "probe": "one pointed follow-up question" },
-    { "id": "machiavelli", "headline": "...", "critique": "...", "probe": "..." },
-    { "id": "sen",         "headline": "...", "critique": "...", "probe": "..." },
-    { "id": "taleb",       "headline": "...", "critique": "...", "probe": "..." }
+  "consequence": "2-4 sentences: the concrete outcome of the decision",
+  "meters": [
+    { "key": "founderConfidence", "delta": <signed integer>, "reason": "one line tying the change to the decision" },
+    { "key": "cashRunway", "delta": <signed integer>, "reason": "one line" },
+    { "key": "teamMorale", "delta": <signed integer>, "reason": "one line" },
+    { "key": "marketPosition", "delta": <signed integer>, "reason": "one line" }
   ]
 }
 
-Each voice MUST stay in character:
-- drucker: Druckerian — outcomes, customer, contribution, accountability
-- machiavelli: power & political realism — coalitions, leverage, rivals
-- sen: capabilities & stakeholder ethics — whose interests are silently traded
-- taleb: risk, fragility, optionality — tail risks, false confidence
+Rules:
+- delta is the signed change to ADD to the current value (e.g. -15, +8, 0). Keep magnitudes realistic — usually within ±25. Not every meter moves; 0 is allowed.
+- Reflect real trade-offs: a bold move may lift one meter and hurt another. Honour the learner's psychology (e.g. conflict-avoidance toward the founder, need to be liked).`;
 
-Tie each critique to a specific element of the learner's profile (e.g. high need for control, low openness to dissent, early-career role, regulated sector). No platitudes.`;
+const WRAPUP_SYSTEM = `You are the debrief engine for a personalized AI executive-leadership simulator. The learner has completed a short run. Given their profile, the full sequence of scenarios, decisions, and consequences, and the final meter values, write a brief, candid wrap-up that reflects their leadership pattern and blind spots back to them.
+
+Return STRICT JSON and nothing else:
+{
+  "title": "<= 60 chars",
+  "summary": "3-4 sentences: the arc of the run and what it reveals about how THIS specific learner leads, tied to their psychological profile",
+  "takeaways": ["3 short, specific, second-person takeaways"]
+}
+
+No platitudes. Be specific to this learner and what actually happened in their run.`;
+
+// Display metadata + canonical ordering for the five discipline mentors.
+// The ids MUST match the keys of MENTOR_PROMPTS above.
+const MENTOR_META = [
+  { id: "disruptor",         name: "The Disruptor",          school: "Disruptive innovation" },
+  { id: "operator",          name: "The Operator",           school: "Execution & operations" },
+  { id: "contrarian",        name: "The Contrarian",         school: "Behavioral economics & cognitive bias" },
+  { id: "systemsThinker",    name: "The Systems-Thinker",    school: "Systems thinking" },
+  { id: "ethicalChallenger", name: "The Ethical Challenger", school: "Stakeholder ethics" },
+] as const;
+
+// Output-format instruction appended AFTER each verbatim mentor prompt.
+// This wraps the prompt for structured output; it never edits the prompt itself.
+const REACTION_FORMAT = `Return STRICT JSON and nothing else, in exactly this shape:
+{
+  "headline": "one sharp sentence, <= 12 words, in your voice",
+  "critique": "2-4 sentences pressure-testing THIS decision, tied to this participant's profile and blind spots",
+  "probe": "one pointed follow-up question"
+}`;
 
 async function callAnthropic(system: string, user: string): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
@@ -124,40 +158,102 @@ function extractJson(text: string): any {
   return JSON.parse(m[0]);
 }
 
+// Five-discipline mentor reactions. Each mentor is a SEPARATE call so it speaks
+// alone, exactly as SHARED_PREAMBLE frames it ("You are one of five..."). System
+// prompt = SHARED_PREAMBLE + the mentor's verbatim prompt + output format wrapper.
+async function generateReactions(profile: any, scenario: any, decision: any) {
+  const decisionText =
+    typeof decision === "string" ? decision : JSON.stringify(decision, null, 2);
+  const user =
+    `Scenario:\n${JSON.stringify(scenario, null, 2)}\n\n` +
+    `The participant's decision:\n${decisionText}\n\n` +
+    `Participant profile (professional context + psychological profile incl. blind spots):\n` +
+    `${JSON.stringify(profile, null, 2)}\n\nReact now.`;
+
+  return await Promise.all(
+    MENTOR_META.map(async (m) => {
+      const system = `${SHARED_PREAMBLE}\n\n${MENTOR_PROMPTS[m.id]}\n\n${REACTION_FORMAT}`;
+      const text = await callAnthropic(system, user);
+      const parsed = extractJson(text);
+      return { id: m.id, name: m.name, school: m.school, ...parsed };
+    })
+  );
+}
+
+function json(payload: any, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+}
+
+// Compact, model-readable summary of the run so far.
+function historyText(history: any[]): string {
+  if (!Array.isArray(history) || history.length === 0) return "(none yet)";
+  return history
+    .map((h, i) => {
+      const title = h?.scenario?.title ?? `Round ${i + 1}`;
+      const dilemma = h?.scenario?.dilemma ?? "";
+      return `Round ${i + 1} — ${title}\n  Dilemma: ${dilemma}\n  Decision: ${h?.decision ?? ""}\n  Consequence: ${h?.consequence ?? ""}`;
+    })
+    .join("\n\n");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { action, profile, scenario, choice } = body;
+    const { action, profile, scenario, decision, meters, history, round } = body;
 
     if (action === "scenario") {
-      const text = await callAnthropic(
-        SCENARIO_SYSTEM,
-        `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\nGenerate one fresh scenario now.`
-      );
-      return new Response(JSON.stringify(extractJson(text)), {
-        headers: { ...corsHeaders, "content-type": "application/json" },
+      const r = Number(round) || 1;
+      const user =
+        r <= 1
+          ? `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
+            `This is ROUND 1. Set realistic INITIAL values for all four meters given this profile and starting situation, and INCLUDE the "meters" field. Generate the opening scenario now.`
+          : `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
+            `This is ROUND ${r}. Do NOT include the "meters" field — the running meters carry over.\n\n` +
+            `Current meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
+            `Story so far:\n${historyText(history)}\n\n` +
+            `Generate the NEXT scenario, following directly from what just happened. Raise the stakes.`;
+      const text = await callAnthropic(SCENARIO_SYSTEM, user);
+      return json(extractJson(text));
+    }
+
+    if (action === "resolve") {
+      const decisionText =
+        typeof decision === "string" ? decision : JSON.stringify(decision, null, 2);
+      const consequenceUser =
+        `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
+        `Scenario:\n${JSON.stringify(scenario, null, 2)}\n\n` +
+        `Current meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
+        `The learner's free-text decision:\n${decisionText}\n\n` +
+        `Produce the consequence and meter deltas now.`;
+
+      const [outcome, reactions] = await Promise.all([
+        callAnthropic(CONSEQUENCE_SYSTEM, consequenceUser).then(extractJson),
+        generateReactions(profile, scenario, decision),
+      ]);
+
+      return json({
+        consequence: outcome.consequence,
+        meters: outcome.meters,
+        reactions,
       });
     }
 
-    if (action === "react") {
-      const text = await callAnthropic(
-        MENTOR_SYSTEM,
-        `Mentors: ${JSON.stringify(MENTORS)}\n\nLearner profile:\n${JSON.stringify(profile, null, 2)}\n\nScenario:\n${JSON.stringify(scenario, null, 2)}\n\nLearner's chosen option:\n${JSON.stringify(choice, null, 2)}\n\nProduce the four reactions now.`
-      );
-      return new Response(JSON.stringify(extractJson(text)), {
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+    if (action === "wrapup") {
+      const user =
+        `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
+        `Final meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
+        `Full run:\n${historyText(history)}\n\n` +
+        `Write the debrief now.`;
+      const text = await callAnthropic(WRAPUP_SYSTEM, user);
+      return json(extractJson(text));
     }
 
-    return new Response(JSON.stringify({ error: "unknown action" }), {
-      status: 400,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    return json({ error: "unknown action" }, 400);
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
-      status: 500,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    return json({ error: String(e?.message ?? e) }, 500);
   }
 });
