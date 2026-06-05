@@ -1,3 +1,21 @@
+// ---- Participant identity (the logged-in student doing the case). This is a
+// real participant record — later populated from the school login/intake layer
+// and shared with the professor layer — not decoration. Marko is WHO is doing
+// the case; he is not a character in it (the case participant is the president). ----
+export type Participant = {
+  name: string;
+  country: string;
+  flag: string;
+  role: string;
+};
+
+export const PARTICIPANT: Participant = {
+  name: "Marko Novaković",
+  country: "Serbia",
+  flag: "🇷🇸",
+  role: "Participant",
+};
+
 // ---- Mentors (names ARE their personalities). ids match the Edge Function. ----
 export type Mentor = { id: string; name: string; school: string; blurb: string };
 
