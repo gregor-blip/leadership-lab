@@ -380,7 +380,7 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
         <div className="kicker">{entry.school}</div>
       </div>
       <div className="my-2.5 h-0.5 w-7" style={{ background: accent ? "var(--electric)" : "var(--rule)" }} />
-      <p className="text-[15px] leading-relaxed">{entry.text}</p>
+      <Markdown text={entry.text} />
     </article>
   );
 }
@@ -400,7 +400,9 @@ function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
         <span className={`h-2 w-2 ${data ? "bg-electric" : "bg-ink/40"}`} />
         <span className="kicker">{data ? "Analyst · from the audited fact-sheet" : "Facilitator"}</span>
       </div>
-      <p className="mt-3 text-[16px] leading-relaxed md:text-[17px]">{text}</p>
+      <div className="mt-3">
+        <Markdown text={text} />
+      </div>
       {data && (
         <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
           {figures.map((f, i) => (
@@ -516,14 +518,104 @@ function CaseText({ text }: { text: string }) {
 }
 
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**") ? (
-      <strong key={i} className="font-semibold text-ink">
-        {p.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={i}>{p}</span>
-    )
-  );
+  const tokens = text.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|`[^`]+`)/g);
+  return tokens.map((tok, i) => {
+    if (!tok) return null;
+    if ((tok.startsWith("**") && tok.endsWith("**")) || (tok.startsWith("__") && tok.endsWith("__"))) {
+      return (
+        <strong key={i} className="font-semibold text-ink">
+          {tok.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (tok.startsWith("`") && tok.endsWith("`")) {
+      return (
+        <code key={i} className="bg-secondary px-1 py-0.5 text-[0.92em]">
+          {tok.slice(1, -1)}
+        </code>
+      );
+    }
+    if ((tok.startsWith("*") && tok.endsWith("*")) || (tok.startsWith("_") && tok.endsWith("_"))) {
+      return (
+        <em key={i} className="italic">
+          {tok.slice(1, -1)}
+        </em>
+      );
+    }
+    return <span key={i}>{tok}</span>;
+  });
+}
+
+/* Lightweight markdown for AI message bodies: paragraphs, bullet + numbered
+   lists, headings (rendered as bold), and inline bold/italic/code. No deps. */
+function Markdown({ text }: { text: string }) {
+  const lines = (text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let para: string[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+
+  const body = "text-[16px] leading-relaxed md:text-[17px]";
+
+  const flushPara = (k: string) => {
+    if (!para.length) return;
+    blocks.push(
+      <p key={k} className={`${body} [&:not(:first-child)]:mt-2.5`}>
+        {renderInline(para.join(" "))}
+      </p>
+    );
+    para = [];
+  };
+  const flushList = (k: string) => {
+    if (!list) return;
+    const L = list;
+    blocks.push(
+      <ul key={k} className="mt-2 space-y-1.5 [&:not(:first-child)]:mt-2.5">
+        {L.items.map((it, i) => (
+          <li key={i} className={`flex gap-2.5 ${body}`}>
+            <span className="shrink-0 text-muted-foreground">
+              {L.ordered ? (
+                <span className="numeral">{i + 1}.</span>
+              ) : (
+                <span className="inline-block translate-y-[0.05em] text-electric">▪</span>
+              )}
+            </span>
+            <span>{renderInline(it)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+    list = null;
+  };
+
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    const ul = line.match(/^[-*+]\s+(.*)$/);
+    const ol = line.match(/^\d+\.\s+(.*)$/);
+    if (ul) {
+      flushPara(`p${i}`);
+      if (!list || list.ordered) {
+        flushList(`l${i}`);
+        list = { ordered: false, items: [] };
+      }
+      list.items.push(ul[1]);
+    } else if (ol) {
+      flushPara(`p${i}`);
+      if (!list || !list.ordered) {
+        flushList(`l${i}`);
+        list = { ordered: true, items: [] };
+      }
+      list.items.push(ol[1]);
+    } else if (!line) {
+      flushPara(`p${i}`);
+      flushList(`l${i}`);
+    } else {
+      flushList(`l${i}`);
+      const h = line.match(/^#{1,6}\s+(.*)$/);
+      para.push(h ? `**${h[1]}**` : line);
+    }
+  });
+  flushPara("pend");
+  flushList("lend");
+
+  return <div>{blocks}</div>;
 }
