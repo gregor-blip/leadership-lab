@@ -49,64 +49,105 @@ ATTACK: Treating people as line items, hiding a cost onto employees or community
 VOICE: Steady, principled, humane but unflinching. Asks the question the room is avoiding.`,
 };
 
-const SCENARIO_SYSTEM = `You are the scenario engine for a PERSONALIZED AI executive-leadership simulator. Every scenario is generated for ONE specific learner, conditioned on their profile (professional context + psychological profile and stated blind spots). Two different profiles MUST produce visibly different scenarios — the personalization is the whole point.
+// Who the participant is. They sit in the dean's seat — not a generic student.
+const PARTICIPANT_IDENTITY =
+  "an IEDC graduate and senior operator who knows the school's situation intimately, now acting as the decision-maker in the president's seat (the dean's seat)";
 
-Write in the SECOND PERSON ("You are..."). Ground every detail in the learner's region, sector, company type, role, seniority, ambition, and psychology. Avoid clichés and generic business-school filler. End at a real decision point.
+// The case the participant reads on screen (markdown). Returned by the `case` action.
+const CASE_TEXT = `### Opening
 
-The simulation tracks four situation meters (0-100): Founder Confidence, Cash Runway, Team Morale, Market Position.
+As he looked out over Lake Bled in the spring of 2026, Prof. Dr. Mislav Ante Omazić, president of the management board of IEDC–Poslovna šola Bled, faced the decision that would define the school's next decade — and arrive in the same year it turned forty.
 
-Return STRICT JSON and nothing else:
-{
-  "title": "<= 60 chars",
-  "context": "2-3 sentences setting the situation, second person",
-  "dilemma": "1-2 sentences naming the tension the learner must resolve",
-  "stakes": ["3 short phrases of what is at risk"],
-  "suggestedMoves": [
-    { "label": "short label", "description": "one sentence — a plausible move this learner might make" }
-  ],
-  "meters": [
-    { "key": "founderConfidence", "value": 0-100, "reason": "one line" },
-    { "key": "cashRunway", "value": 0-100, "reason": "one line" },
-    { "key": "teamMorale", "value": 0-100, "reason": "one line" },
-    { "key": "marketPosition", "value": 0-100, "reason": "one line" }
-  ]
-}
+The recapitalization was done. Nearly €1 million in fresh capital, approved with 97% shareholder support, had stabilized the balance sheet. The neighbouring building — more than 550 m² in the TVD-Partizan property — was finished, capacity the school did not yet have a way to fill. A refreshed board now included a Harvard scholar and the founder of a high-tech company. Everything was in place for a bet. What remained was to decide what, exactly, the bet was.
 
-Rules:
-- suggestedMoves: provide 2 OR 3, distinct in posture (not variations of the same move). They seed the learner's free-text response; they are not the only options.
-- meters: include all four ONLY when told this is round 1. For later rounds, OMIT the "meters" field entirely — the running meters carry over.`;
+### The school
 
-const CONSEQUENCE_SYSTEM = `You are the consequence engine for a personalized AI executive-leadership simulator. Given a scenario, the learner's FREE-TEXT decision, their profile, and the current meter values, write what realistically happens next and how the four meters move.
+Founded in 1986 and operating from its campus on the shore of Lake Bled, IEDC is one of Central and Eastern Europe's leading business schools — "Šola z vizijo," a school with a view, and a vision. Its reputation was built over four decades by its founder and dean, Prof. Dr. Danica Purg, on a distinctive model: premium, residential, experiential executive education — the five-week General Management Program, learning drawn from art and ethics, world-class international faculty, and a network of more than 6,000 alumni across 75 countries. The differentiation was human depth: reflection, transformation, presence. Things that happen in a room, on a lake, over weeks.
 
-Write the consequence in the SECOND PERSON, concrete and specific to THIS decision and THIS learner. No platitudes.
+### The pressure
 
-The four meters (0-100): Founder Confidence, Cash Runway, Team Morale, Market Position.
+That model is under pressure from two directions at once.
 
-Return STRICT JSON and nothing else:
-{
-  "consequence": "2-4 sentences: the concrete outcome of the decision",
-  "meters": [
-    { "key": "founderConfidence", "delta": <signed integer>, "reason": "one line tying the change to the decision" },
-    { "key": "cashRunway", "delta": <signed integer>, "reason": "one line" },
-    { "key": "teamMorale", "delta": <signed integer>, "reason": "one line" },
-    { "key": "marketPosition", "delta": <signed integer>, "reason": "one line" }
-  ]
-}
+From below and beside: the region is filling with business schools. Every year more institutions compete for the same finite pool of executive and corporate students, many at lower prices, many willing to offer faster, cheaper, more convenient formats.
 
-Rules:
-- delta is the signed change to ADD to the current value (e.g. -15, +8, 0). Keep magnitudes realistic — usually within ±25. Not every meter moves; 0 is allowed.
-- Reflect real trade-offs: a bold move may lift one meter and hurt another. Honour the learner's psychology (e.g. conflict-avoidance toward the founder, need to be liked).`;
+From the technology: AI-driven and online education is eroding the scarcity premium of in-person learning. The skills a business school historically sold — how to read a balance sheet, build a model, calculate a return — are increasingly things a machine does instantly and for free.
 
-const WRAPUP_SYSTEM = `You are the debrief engine for a personalized AI executive-leadership simulator. The learner has completed a short run. Given their profile, the full sequence of scenarios, decisions, and consequences, and the final meter values, write a brief, candid wrap-up that reflects their leadership pattern and blind spots back to them.
+And underneath both: the economics. IEDC is asset-rich and cash-poor — roughly €9 million of value locked in Bled real estate, against a fixed-cost base that costs what it costs whether the campus is full or empty. (See exhibits.)
 
-Return STRICT JSON and nothing else:
-{
-  "title": "<= 60 chars",
-  "summary": "3-4 sentences: the arc of the run and what it reveals about how THIS specific learner leads, tied to their psychological profile",
-  "takeaways": ["3 short, specific, second-person takeaways"]
-}
+### The decision
 
-No platitudes. Be specific to this learner and what actually happened in their run.`;
+Omazić has three doors.
+
+1. **Compete on price.** Lower fees to defend enrollment against the new entrants.
+2. **Compete on access.** Broaden the model — larger cohorts, lower the bar, more volume.
+3. **Change the category.** Bet the new capacity and the school's future on becoming the region's AI hub — the institution companies turn to when they want to actually implement AI in their organizations. Stack scalable, AI-era programs onto the fixed base, fill the empty capacity, and stop competing as one more business school in a crowd.
+
+The new building is the physical sign that door three is already on his mind. But door three is also the furthest from what IEDC has always been, the hardest to execute on €130k of cash and 14 people, and the most crowded claim in the entire market.
+
+What should Omazić do?`;
+
+// Authoritative server-side fact-sheet. The AI reasons over THIS for every
+// figure — and must never invent a number that is not here.
+const FACT_SHEET = `IDENTITY
+- Institution: IEDC – Poslovna šola Bled (IEDC-Bled School of Management)
+- Founded: 1986 (company IEDC d.o.o. registered 1997); 40th anniversary in 2026
+- Location: Prešernova cesta 33, Bled, Slovenia
+- Dean / founder: Prof. Dr. Danica Purg
+- President, management board: Prof. Dr. Mislav Ante Omazić
+- Supervisory board chair: Prof. Dr. Stjepan Orešković
+- Alumni: 6,000+ in 75 countries
+- Model: premium residential executive education (GMP 5-week, YMP, Executive MBA, custom corporate programs, forums); experiential / art-based learning
+- Tagline: "Šola z vizijo" / "A school with a view"
+
+FINANCIAL EXHIBITS — audited, € (FY2022–2024)
+Line | 2022 | 2023 | 2024
+Net sales revenue | 1,704,295 | 1,906,243 | 1,744,109
+Other operating income | 147,697 | 230,279 | 195,036
+Net loss | -251,069 | -155,897 | -190,705
+Accumulated deficit (year-end) | -2,181,918 | -2,432,987 | -3,285,845
+Total assets | 9,970,350 | 10,358,421 | 10,070,904
+Cash | 33,848 | 47,016 | 130,018
+Equity | 7,120,759 | 6,813,554 | 6,658,066
+Long-term bank debt | 841,667 | 741,667 | 934,994
+Avg. employees (FTE) | 14.86 | 16.63 | 14.17
+
+DERIVED COST STRUCTURE (2024, from audited P&L)
+- Cost of goods/material + services: €1,213,648
+- Labour cost: €851,588
+- Amortization: €105,020
+- Other operating expense: €36,303
+- Financial expense: €76,713
+- Total operating + financial cost ≈ €2,283,272
+- Revenue €1,744,109 vs cost base ≈ €2.28M → structural gap ≈ €540k (the gap that makes "cut price" / "cut standards" mathematically fatal)
+
+ASSET STRUCTURE (2024)
+- Land + buildings: €7,372,000
+- Investment property: €1,884,000
+- Equipment: €191,253
+- Real estate ≈ €9.26M of €10.07M total assets — asset-rich, cash-poor (€130k cash)
+
+CAPITAL & SOLVENCY CONTEXT
+- 2024 audit: accumulated + current-year loss exceeds half of share capital → flagged capital-adequacy / long-term solvency risk (going-concern emphasis; opinion not modified)
+- Recapitalizations: €627,531 (2024) + €970,000 (June 2025, 97% shareholder support)
+- Shareholders described as leading regional companies across industries
+- Long-term bank loan secured by mortgage on Bled real estate
+
+STRATEGIC / FORWARD FACTS (2025–26)
+- TVD-Partizan build-out: 550+ m² new capacity, completed — for innovative programs and global business events
+- Supervisory board approved 2025–27 business plan; encouraging 2025/26 Executive MBA enrollment forecast
+- March 2026: leadership refresh to strengthen international + innovation orientation (incl. a Harvard scholar and a tech-company founder on the boards)
+- Nov 2025 Presidential Forum themed on AI-driven digital transformation and an unpredictable world
+- Future 500 initiative; 15-business-school consortium; stated focus on AI programs
+
+THE THREE DOORS (the decision — there is NO "right" answer)
+1. Cut price — defend enrollment on fees. Trap: widens the €540k gap; erodes premium; doesn't fix fixed costs.
+2. Cut standards / broaden access — volume over exclusivity. Trap: kills the reputation that justifies the premium; becomes a commodity on a lake.
+3. Become the regional AI hub — fill the new capacity with scalable AI-era and corporate-AI-implementation programs; stack revenue on the fixed base; change the category. Risk: furthest from IEDC's identity; hardest to execute on €130k cash + 14 staff; most crowded claim in the market.
+
+PRE-COMPUTED ANALYTICAL READS (what the analyst surfaces on request)
+- 3-year trend: revenue flat/volatile (1.70M → 1.91M → 1.74M), no durable growth; loss every year; accumulated deficit deepening ~€1.1M in two years and accelerating.
+- Structural weak point: fixed-cost base (~€2.28M) exceeds revenue (~€1.74M) by ~€540k; ~€9.26M locked in real estate; €130k cash; 14 FTE. Solvency maintained by recapitalization, not operations.
+- Why doors 1 & 2 are fatal: both shrink revenue or margin against a cost base that cannot shrink proportionally → they make the table worse. Door 3 is the only path that grows revenue against the fixed base by filling unused capacity.`;
 
 // Display metadata + canonical ordering for the five discipline mentors.
 // The ids MUST match the keys of MENTOR_PROMPTS above.
@@ -118,16 +159,58 @@ const MENTOR_META = [
   { id: "ethicalChallenger", name: "The Ethical Challenger", school: "Stakeholder ethics" },
 ] as const;
 
-// Output-format instruction appended AFTER each verbatim mentor prompt.
-// This wraps the prompt for structured output; it never edits the prompt itself.
-const REACTION_FORMAT = `Return STRICT JSON and nothing else, in exactly this shape:
-{
-  "headline": "one sharp sentence, <= 12 words, in your voice",
-  "critique": "2-4 sentences pressure-testing THIS decision, tied to this participant's profile and blind spots",
-  "probe": "one pointed follow-up question"
-}`;
+// The full council roster rendered for the orchestrator, each mentor's verbatim
+// lens included unchanged.
+const MENTOR_ROSTER = MENTOR_META.map(
+  (m) => `[${m.name} — id: "${m.id}" — ${m.school}]\n${MENTOR_PROMPTS[m.id]}`
+).join("\n\n");
 
-async function callAnthropic(system: string, user: string): Promise<string> {
+// Orchestrator system prompt for the live conversation. Assembled once from the
+// verbatim charter + five lenses + the case + the authoritative fact-sheet.
+const TURN_SYSTEM = `You are the live intelligence behind "IEDC Leadership Lab", an AI-native MBA case experience. You run ONE fixed case as a Socratic conversation — not a quiz. There is no score and no single right answer. Every turn you do TWO jobs:
+
+1) THE WORLD / ANALYST. Answer the participant's factual and analytical questions about the case using ONLY the FACT-SHEET below. Run whatever analysis they ask for — trends, gaps, ratios, comparisons — directly from these numbers, and read the result back plainly and decisively, like an analyst who just ran it. NEVER invent, round beyond the data, or estimate a figure that is not in or derivable from the fact-sheet. If a number genuinely isn't there, say you don't have that figure rather than fabricating it.
+
+2) THE COUNCIL. Five mentor archetypes (defined below) advise the participant. They speak in their own distinct voices, they DISAGREE — with the participant and with each other — and they respond to being summoned, pushed, or dismissed. Do NOT make all five speak every turn: only the mentors who are relevant to this turn speak. If the participant addresses or summons specific mentors, those speak. If the participant tells a mentor to stay quiet or dismisses one, that mentor does NOT speak this turn (note it briefly). On the core strategic decision (the three doors) the council should genuinely clash about HOW FAST to move and WHAT TO SACRIFICE.
+
+THE PARTICIPANT sits in the dean's seat: ${PARTICIPANT_IDENTITY}. Address them as the decision-maker, never as a student to be lectured.
+
+PROHIBITED: fabricating quotes from, or role-playing AS, real people (Omazić, Purg, Orešković). Refer to them only as factual roles. The five mentors are archetypes and are NEVER real named people.
+
+=== THE CASE (what the participant is reading) ===
+${CASE_TEXT}
+
+=== FACT-SHEET (authoritative; your ONLY source for figures) ===
+${FACT_SHEET}
+
+=== THE COUNCIL CHARTER ===
+${SHARED_PREAMBLE}
+
+=== THE FIVE MENTORS ===
+${MENTOR_ROSTER}
+
+=== OUTPUT ===
+Return STRICT JSON and nothing else, in exactly this shape:
+{
+  "analyst": {
+    "spoke": true | false,
+    "answer": "plain-language analyst response grounded ONLY in the fact-sheet, or \"\" if no data/analysis was requested",
+    "figures": [ { "label": "e.g. 2024 net loss", "value": "e.g. -€190,705" } ]
+  },
+  "council": [
+    { "id": "disruptor | operator | contrarian | systemsThinker | ethicalChallenger", "message": "in-voice, 2-4 sentences; may name and rebut another mentor by name" }
+  ],
+  "note": "optional ONE short line — a world/stage note, e.g. acknowledging a mentor was summoned or told to stay quiet; \"\" if none"
+}
+
+RULES:
+- analyst.spoke = true ONLY when the turn asks for facts or analysis; otherwise spoke=false and answer="".
+- figures: list the specific numbers you cited; [] if none.
+- council: include only the relevant or summoned mentors, ordered by relevance. At least one mentor speaks UNLESS the turn is a pure data request with no decision content (then council may be []).
+- Keep each mentor message tight and unmistakably in its own voice; let them disagree openly.
+- English only.`;
+
+async function callAnthropic(system: string, user: string, maxTokens = 1500): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -139,7 +222,7 @@ async function callAnthropic(system: string, user: string): Promise<string> {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: user }],
     }),
@@ -158,26 +241,33 @@ function extractJson(text: string): any {
   return JSON.parse(m[0]);
 }
 
-// Five-discipline mentor reactions. Each mentor is a SEPARATE call so it speaks
-// alone, exactly as SHARED_PREAMBLE frames it ("You are one of five..."). System
-// prompt = SHARED_PREAMBLE + the mentor's verbatim prompt + output format wrapper.
-async function generateReactions(profile: any, scenario: any, decision: any) {
-  const decisionText =
-    typeof decision === "string" ? decision : JSON.stringify(decision, null, 2);
-  const user =
-    `Scenario:\n${JSON.stringify(scenario, null, 2)}\n\n` +
-    `The participant's decision:\n${decisionText}\n\n` +
-    `Participant profile (professional context + psychological profile incl. blind spots):\n` +
-    `${JSON.stringify(profile, null, 2)}\n\nReact now.`;
-
-  return await Promise.all(
-    MENTOR_META.map(async (m) => {
-      const system = `${SHARED_PREAMBLE}\n\n${MENTOR_PROMPTS[m.id]}\n\n${REACTION_FORMAT}`;
-      const text = await callAnthropic(system, user);
-      const parsed = extractJson(text);
-      return { id: m.id, name: m.name, school: m.school, ...parsed };
+// Render the conversation so far for the orchestrator. `history` is a flat list
+// of prior turns: { role: "participant" | "analyst" | "council", name?, text }.
+function formatTranscript(history: any[]): string {
+  if (!Array.isArray(history) || history.length === 0) return "(this is the first turn)";
+  return history
+    .map((m) => {
+      const text = String(m?.text ?? "").trim();
+      if (!text) return "";
+      if (m.role === "participant") return `PARTICIPANT: ${text}`;
+      if (m.role === "analyst") return `ANALYST: ${text}`;
+      if (m.role === "council") return `${m.name ?? "MENTOR"}: ${text}`;
+      return "";
     })
-  );
+    .filter(Boolean)
+    .join("\n");
+}
+
+// Attach display name + school to each council message the model returns.
+function decorateCouncil(council: any[]): any[] {
+  if (!Array.isArray(council)) return [];
+  return council
+    .map((c) => {
+      const meta = MENTOR_META.find((m) => m.id === c?.id);
+      if (!meta) return null;
+      return { id: meta.id, name: meta.name, school: meta.school, message: String(c?.message ?? "") };
+    })
+    .filter(Boolean);
 }
 
 function json(payload: any, status = 200) {
@@ -187,69 +277,36 @@ function json(payload: any, status = 200) {
   });
 }
 
-// Compact, model-readable summary of the run so far.
-function historyText(history: any[]): string {
-  if (!Array.isArray(history) || history.length === 0) return "(none yet)";
-  return history
-    .map((h, i) => {
-      const title = h?.scenario?.title ?? `Round ${i + 1}`;
-      const dilemma = h?.scenario?.dilemma ?? "";
-      return `Round ${i + 1} — ${title}\n  Dilemma: ${dilemma}\n  Decision: ${h?.decision ?? ""}\n  Consequence: ${h?.consequence ?? ""}`;
-    })
-    .join("\n\n");
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { action, profile, scenario, decision, meters, history, round } = body;
+    const { action } = body;
 
-    if (action === "scenario") {
-      const r = Number(round) || 1;
-      const user =
-        r <= 1
-          ? `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
-            `This is ROUND 1. Set realistic INITIAL values for all four meters given this profile and starting situation, and INCLUDE the "meters" field. Generate the opening scenario now.`
-          : `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
-            `This is ROUND ${r}. Do NOT include the "meters" field — the running meters carry over.\n\n` +
-            `Current meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
-            `Story so far:\n${historyText(history)}\n\n` +
-            `Generate the NEXT scenario, following directly from what just happened. Raise the stakes.`;
-      const text = await callAnthropic(SCENARIO_SYSTEM, user);
-      return json(extractJson(text));
+    // Static case text — no AI call, so the case display is bulletproof.
+    if (action === "case") {
+      return json({ caseText: CASE_TEXT });
     }
 
-    if (action === "resolve") {
-      const decisionText =
-        typeof decision === "string" ? decision : JSON.stringify(decision, null, 2);
-      const consequenceUser =
-        `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
-        `Scenario:\n${JSON.stringify(scenario, null, 2)}\n\n` +
-        `Current meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
-        `The learner's free-text decision:\n${decisionText}\n\n` +
-        `Produce the consequence and meter deltas now.`;
-
-      const [outcome, reactions] = await Promise.all([
-        callAnthropic(CONSEQUENCE_SYSTEM, consequenceUser).then(extractJson),
-        generateReactions(profile, scenario, decision),
-      ]);
-
+    // The live conversation turn: analyst (fact-sheet) + council (mentors).
+    if (action === "turn") {
+      const message = String(body.message ?? "").trim();
+      if (!message) return json({ error: "empty message" }, 400);
+      const user =
+        `CONVERSATION SO FAR:\n${formatTranscript(body.history)}\n\n` +
+        `PARTICIPANT (this turn): ${message}\n\n` +
+        `Respond now as analyst + council, following the OUTPUT schema exactly.`;
+      const text = await callAnthropic(TURN_SYSTEM, user, 2400);
+      const parsed = extractJson(text);
       return json({
-        consequence: outcome.consequence,
-        meters: outcome.meters,
-        reactions,
+        analyst: {
+          spoke: !!parsed?.analyst?.spoke,
+          answer: String(parsed?.analyst?.answer ?? ""),
+          figures: Array.isArray(parsed?.analyst?.figures) ? parsed.analyst.figures : [],
+        },
+        council: decorateCouncil(parsed?.council),
+        note: String(parsed?.note ?? ""),
       });
-    }
-
-    if (action === "wrapup") {
-      const user =
-        `Learner profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
-        `Final meter values:\n${JSON.stringify(meters, null, 2)}\n\n` +
-        `Full run:\n${historyText(history)}\n\n` +
-        `Write the debrief now.`;
-      const text = await callAnthropic(WRAPUP_SYSTEM, user);
-      return json(extractJson(text));
     }
 
     return json({ error: "unknown action" }, 400);
