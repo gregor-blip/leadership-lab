@@ -21,6 +21,9 @@ export const Route = createFileRoute("/")({
 
 type Phase = "onboarding" | "conversation";
 
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
 function App() {
   const [phase, setPhase] = useState<Phase>("onboarding");
   const [caseText, setCaseText] = useState<string>("");
@@ -40,77 +43,103 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="relative min-h-screen">
+      {/* grain atmosphere */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 opacity-[0.05] mix-blend-multiply"
+        style={{ backgroundImage: GRAIN }}
+        aria-hidden
+      />
       <Toaster position="top-right" />
-      <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
-        <AppChrome>
+      <div className="relative z-10 mx-auto max-w-[1200px] px-4 py-7 md:px-8 md:py-12">
+        <AppFrame>
           <Header />
           {phase === "onboarding" ? (
             <OnboardingBrief loading={loadingCase} onBegin={begin} />
           ) : (
             <Conversation caseText={caseText} />
           )}
-        </AppChrome>
-        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
+        </AppFrame>
+        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2">
           <span className="kicker">
-            A live case, in conversation — adversarial mentors grounded in distinct schools of thought, not real individuals.
+            Adversarial mentors grounded in distinct schools of thought — not real individuals.
           </span>
-          <span className="numeral text-muted-foreground">IEDC · Bled</span>
+          <span className="kicker">IEDC · Bled · MMXXVI</span>
         </footer>
       </div>
     </div>
   );
 }
 
-/* ---------- chrome + header ---------- */
+/* ---------- frame + masthead ---------- */
 
-function AppChrome({ children }: { children: React.ReactNode }) {
+function AppFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border hairline bg-card shadow-[0_40px_90px_-50px_rgba(60,40,10,0.35)]">
-      <div className="flex items-center justify-between border-b hairline px-4 py-2.5">
-        <div className="flex gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
+    <div className="rise border border-rule-strong bg-card shadow-[0_30px_90px_-45px_rgba(70,50,20,0.30)]">
+      <div className="flex items-center justify-between border-b hairline px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <span className="h-3 w-3 bg-gold" />
+          <span className="kicker text-ink">IEDC Leadership Lab</span>
         </div>
-        <div className="kicker">iedc leadership lab — concept prototype</div>
-        <div className="w-12" />
+        <span className="kicker">Concept prototype</span>
       </div>
-      <div className="p-5 md:p-9">{children}</div>
+      <div className="p-5 md:p-10">{children}</div>
     </div>
   );
 }
 
 function Header() {
   return (
-    <header className="flex flex-col gap-4 border-b hairline pb-6 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <div className="kicker">IEDC Leadership Lab</div>
-        <h1 className="mt-2 text-[36px] font-medium leading-[0.95] tracking-tight md:text-[44px]">
-          A live case, in conversation.
-        </h1>
-        <div className="tagline mt-3 text-lg text-ink/80">
-          Not a quiz — an intelligence you talk to, command, and argue with.
+    <header className="flex flex-col gap-6 border-b border-rule-strong pb-7 sm:flex-row sm:items-end sm:justify-between">
+      <div className="max-w-2xl">
+        <div className="flex items-center gap-3">
+          <span className="kicker">Executive Case Studio</span>
+          <span className="h-px w-12 bg-gold" />
         </div>
+        <h1 className="display mt-4 text-[42px] font-normal leading-[0.95] tracking-[-0.02em] text-ink md:text-[58px]">
+          A live case,
+          <br />
+          <span className="tagline">in conversation.</span>
+        </h1>
+        <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-ink-soft md:text-base">
+          Not a quiz — an institutional intelligence you talk to, command, and argue with.
+        </p>
       </div>
-      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-        <ParticipantBadge />
-        <span className="kicker border hairline px-2.5 py-1.5">Concept prototype</span>
-      </div>
+      <ParticipantBadge />
     </header>
   );
 }
 
-// The logged-in student this case is assigned to.
+// A real, recognizable Serbian tricolour (no emoji that degrades to "RS").
+function SerbianFlag() {
+  return (
+    <svg
+      width="28"
+      height="20"
+      viewBox="0 0 28 20"
+      className="block shrink-0"
+      role="img"
+      aria-label="Serbia"
+    >
+      <rect width="28" height="20" rx="2.5" fill="#0C4076" />
+      <rect width="28" height="6.67" y="0" fill="#C6363C" />
+      <rect width="28" height="6.66" y="13.34" fill="#F4F1EA" />
+      <rect x="0.5" y="0.5" width="27" height="19" rx="2" fill="none" stroke="rgba(40,30,10,0.20)" />
+    </svg>
+  );
+}
+
+// The logged-in student this case is assigned to — a real product account chip.
 function ParticipantBadge() {
   return (
-    <div className="flex items-center gap-2.5 border hairline px-3 py-1.5">
-      <span className="text-lg leading-none" aria-hidden>
-        {PARTICIPANT.flag}
-      </span>
+    <div className="rise flex shrink-0 items-center gap-3 border border-rule bg-paper-2/50 px-3.5 py-2.5">
+      <SerbianFlag />
       <div className="leading-tight">
-        <div className="text-sm font-medium tracking-tight">{PARTICIPANT.name}</div>
-        <div className="kicker text-[9px]">Logged in · {PARTICIPANT.country}</div>
+        <div className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{PARTICIPANT.name}</div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+          <span className="kicker text-[9px]">Logged in · {PARTICIPANT.country}</span>
+        </div>
       </div>
     </div>
   );
@@ -120,56 +149,58 @@ function ParticipantBadge() {
 
 function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () => void }) {
   return (
-    <section className="pt-7">
-      <div className="kicker">The brief / 00</div>
-      <h2 className="tagline mt-2 max-w-2xl text-2xl leading-snug md:text-[28px]">
+    <section className="pt-8">
+      <div className="kicker">The brief · 00</div>
+      <h2 className="tagline mt-3 max-w-3xl text-[26px] leading-[1.2] text-ink md:text-[34px]">
         You sit in the president's seat at IEDC.
       </h2>
 
-      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-3">
-        <BriefPoint n="01" title="A real situation">
-          This is as close to a real executive situation as it gets. You'll face a real decision with
-          incomplete information. Talk freely, in your own words — the AI understands you.
+      <div className="mt-9 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-3">
+        <BriefPoint n="01" title="A real situation" delay={80}>
+          As close to a real executive situation as it gets. A real decision, with incomplete
+          information. Talk freely, in your own words — the intelligence understands you.
         </BriefPoint>
-        <BriefPoint n="02" title="Ask for the data">
-          You don't have all the numbers — so ask for them. Any metric, any analysis: ask, and the AI
-          runs it. You no longer calculate; you command. The old skill was doing the math. The new skill
-          is knowing what to ask.
+        <BriefPoint n="02" title="Ask for the data" delay={160}>
+          You don't have all the numbers — so ask. Any metric, any analysis: ask, and it runs.
+          You no longer calculate; you command. The new skill is knowing what to ask.
         </BriefPoint>
-        <BriefPoint n="03" title="You are not alone">
-          You command a council of five mentors. Their names are their personalities. They will disagree —
-          with you and with each other. Ask them, push them deeper, tell one to stay quiet, or talk to just
-          one. This is life, not software.
+        <BriefPoint n="03" title="You are not alone" delay={240}>
+          A council of five mentors. Their names are their personalities. They disagree — with you and
+          each other. Summon them, push them, or tell one to stay quiet. This is life, not software.
         </BriefPoint>
       </div>
 
-      <div className="mt-9 border-t hairline pt-6">
-        <div className="kicker mb-4">Your council</div>
-        <div className="grid grid-cols-1 gap-0 border hairline sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mt-10 border-t hairline pt-7">
+        <div className="flex items-center gap-3">
+          <span className="kicker text-ink">Your council</span>
+          <span className="h-px flex-1 bg-rule" />
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-0 border border-rule sm:grid-cols-2 lg:grid-cols-5">
           {MENTORS.map((m, i) => (
             <div
               key={m.id}
-              className={`p-4 ${i < MENTORS.length - 1 ? "border-b hairline lg:border-b-0 lg:border-r" : ""} ${
+              className={`rise p-5 ${i < MENTORS.length - 1 ? "border-b hairline lg:border-b-0 lg:border-r" : ""} ${
                 i % 2 === 0 ? "sm:border-r hairline" : ""
               } lg:border-r`}
+              style={{ animationDelay: `${300 + i * 70}ms` }}
             >
-              <div className="kicker text-[9.5px]">{m.school}</div>
-              <div className="mt-1.5 text-lg tracking-tight">
-                {m.id === "ethicalChallenger" && <span className="mr-1.5 text-electric">●</span>}
+              <div className="kicker text-[9px]">{m.school}</div>
+              <div className="display mt-2 text-[19px] font-medium tracking-[-0.01em] text-ink">
+                {m.id === "ethicalChallenger" && <span className="mr-1.5 text-gold-deep">◆</span>}
                 {m.name}
               </div>
-              <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{m.blurb}</p>
+              <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-soft">{m.blurb}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-9 flex flex-wrap items-center justify-between gap-4">
         <span className="kicker">No score · no right answer · the conversation is the point</span>
         <button
           onClick={onBegin}
           disabled={loading}
-          className="bg-electric px-7 py-3.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="bg-gold px-8 py-4 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-all hover:brightness-[1.04] disabled:opacity-40"
         >
           {loading ? "Loading case…" : "Begin →"}
         </button>
@@ -178,12 +209,22 @@ function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () =
   );
 }
 
-function BriefPoint({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+function BriefPoint({
+  n,
+  title,
+  children,
+  delay,
+}: {
+  n: string;
+  title: string;
+  children: React.ReactNode;
+  delay: number;
+}) {
   return (
-    <div>
-      <div className="numeral text-3xl text-electric">{n}</div>
-      <h3 className="mt-2 text-lg font-medium tracking-tight">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</p>
+    <div className="rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="numeral text-[40px] leading-none text-gold-deep">{n}</div>
+      <h3 className="display mt-3 text-[19px] font-medium tracking-[-0.01em] text-ink">{title}</h3>
+      <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">{children}</p>
     </div>
   );
 }
@@ -254,18 +295,17 @@ function Conversation({ caseText }: { caseText: string }) {
   }
 
   return (
-    <div className="pt-6">
-      {/* CASE — collapsible bar on top; expand any time to re-read it */}
+    <div className="pt-7">
       <CaseBar open={caseOpen} onToggle={() => setCaseOpen((o) => !o)} caseText={caseText} />
 
-      {/* CONVERSATION — full width, owns the screen */}
-      <section className="mt-6">
-        <div className="flex items-center justify-between border-b hairline pb-3">
-          <div className="kicker">The conversation / 02</div>
-          <div className="kicker text-muted-foreground">Talk freely · ask · decide · convene</div>
+      <section className="mt-7">
+        <div className="flex items-center gap-3 border-b border-rule-strong pb-3">
+          <span className="kicker text-ink">The conversation · 02</span>
+          <span className="h-px flex-1 bg-rule" />
+          <span className="kicker">ask · decide · convene</span>
         </div>
 
-        <div className="space-y-4 py-5">
+        <div className="space-y-5 py-6">
           {transcript.length === 0 && !thinking && <EmptyState />}
           {transcript.map((e, i) => (
             <TranscriptItem key={i} entry={e} index={i} />
@@ -287,7 +327,19 @@ function Conversation({ caseText }: { caseText: string }) {
   );
 }
 
-// The case as a collapsible bar at the top of the conversation.
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block text-ink transition-transform duration-300"
+      style={{ transform: open ? "rotate(180deg)" : "none" }}
+    >
+      ▾
+    </span>
+  );
+}
+
+// The case as a collapsible masthead bar at the top of the conversation.
 function CaseBar({
   open,
   onToggle,
@@ -298,21 +350,27 @@ function CaseBar({
   caseText: string;
 }) {
   return (
-    <div className="border hairline">
+    <div className="rise border border-rule">
       <button
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50"
+        className="flex w-full items-center justify-between gap-4 bg-paper-2/50 px-5 py-4 text-left transition-colors hover:bg-paper-2"
       >
-        <span className="kicker">The case · IEDC–Poslovna šola Bled</span>
-        <span className="kicker flex items-center gap-2 text-muted-foreground">
-          {open ? "Hide" : "Read the case"}
-          <span aria-hidden className="text-ink">{open ? "▲" : "▼"}</span>
+        <span className="flex items-center gap-3">
+          <span className="h-2.5 w-2.5 bg-gold" />
+          <span className="kicker text-ink">The Case</span>
+          <span className="tagline hidden text-[15px] text-ink-soft sm:inline">
+            IEDC–Poslovna šola Bled · Spring 2026
+          </span>
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="kicker">{open ? "Hide" : "Read the case"}</span>
+          <Chevron open={open} />
         </span>
       </button>
       {open && (
-        <div className="max-h-[58vh] overflow-y-auto border-t hairline px-5 py-6">
-          <div className="mx-auto max-w-3xl">
+        <div className="max-h-[60vh] overflow-y-auto border-t hairline px-6 py-8 md:px-12 md:py-10">
+          <div className="case-prose mx-auto max-w-[68ch]">
             <CaseText text={caseText} />
           </div>
         </div>
@@ -323,13 +381,13 @@ function CaseBar({
 
 function EmptyState() {
   return (
-    <div className="border hairline p-5">
-      <p className="tagline text-lg">The floor is yours.</p>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Read the case above, then respond in your own words — you'll get one direct reply, like a
-        real conversation. Ask for any number or analysis (“show me the three-year financial trend”), or
-        state a direction. When you want pushback, <span className="text-ink">summon the council</span>{" "}
-        below — or just say so (“council, tear this apart”).
+    <div className="rise border border-rule bg-paper-2/40 px-6 py-7 md:px-8">
+      <p className="tagline text-[22px] text-ink md:text-[26px]">The floor is yours.</p>
+      <p className="mt-3 max-w-[68ch] text-[15px] leading-relaxed text-ink-soft">
+        Read the case above, then respond in your own words — you'll get one direct reply, like a real
+        conversation. Ask for any number or analysis (“show me the three-year financial trend”), or state a
+        direction. When you want pushback, <span className="text-ink">Convene the council</span> below — or
+        just say so (“council, tear this apart”).
       </p>
     </div>
   );
@@ -337,11 +395,13 @@ function EmptyState() {
 
 function Thinking() {
   return (
-    <div className="flex items-center gap-2 px-1 text-muted-foreground">
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50" />
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:150ms]" />
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:300ms]" />
-      <span className="kicker ml-1">The room is thinking</span>
+    <div className="rise flex items-center gap-2.5 py-1">
+      <span className="flex gap-1">
+        <span className="h-1.5 w-1.5 rounded-full bg-gold/80 animate-pulse" />
+        <span className="h-1.5 w-1.5 rounded-full bg-gold/80 animate-pulse [animation-delay:160ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-gold/80 animate-pulse [animation-delay:320ms]" />
+      </span>
+      <span className="tagline text-[15px] text-ink-soft">the room is considering…</span>
     </div>
   );
 }
@@ -349,69 +409,106 @@ function Thinking() {
 function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: number }) {
   if (entry.kind === "participant") {
     return (
-      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300 border-l-2 border-ink bg-secondary/60 px-4 py-3">
-        <div className="kicker mb-1">You · in the president's seat</div>
-        <p className="text-[15px] leading-relaxed">{entry.text}</p>
+      <div className="rise border-l-2 border-ink bg-paper-2/50 px-5 py-4">
+        <div className="kicker mb-1.5">You · the president's seat</div>
+        <p className="text-[17px] leading-relaxed text-ink">{entry.text}</p>
       </div>
     );
   }
   if (entry.kind === "note") {
     return (
-      <p className="tagline px-1 text-center text-sm text-muted-foreground animate-in fade-in duration-300">
-        {entry.text}
-      </p>
+      <div className="rise flex items-center justify-center gap-3 py-1">
+        <span className="h-px w-10 bg-rule" />
+        <span className="tagline text-[15px] text-ink-soft">{entry.text}</span>
+        <span className="h-px w-10 bg-rule" />
+      </div>
     );
   }
   if (entry.kind === "facilitator") {
-    return <ReplyCard text={entry.text} figures={entry.figures} />;
+    return <FacilitatorVoice text={entry.text} figures={entry.figures} />;
   }
-  // council
+  // council mentor
   const accent = entry.id === "ethicalChallenger";
   return (
     <article
-      className="animate-in fade-in slide-in-from-bottom-2 border hairline p-4 md:p-5"
-      style={{ animationDuration: "450ms", animationDelay: `${(index % 5) * 70}ms`, animationFillMode: "both" }}
+      className="rise border border-rule bg-card p-5 md:p-6"
+      style={{
+        animationDelay: `${(index % 5) * 80}ms`,
+        borderLeftWidth: "3px",
+        borderLeftColor: accent ? "var(--gold)" : "var(--rule-strong)",
+      }}
     >
-      <div className="flex items-baseline justify-between">
-        <div className="text-lg tracking-tight">
-          {accent && <span className="mr-1.5 text-electric">●</span>}
+      <div className="flex items-baseline justify-between gap-4">
+        <h4 className="display text-[21px] font-medium tracking-[-0.01em] text-ink md:text-[23px]">
           {entry.name}
-        </div>
-        <div className="kicker">{entry.school}</div>
+        </h4>
+        <span className="kicker shrink-0">{entry.school}</span>
       </div>
-      <div className="my-2.5 h-0.5 w-7" style={{ background: accent ? "var(--electric)" : "var(--rule)" }} />
-      <p className="text-[15px] leading-relaxed">{entry.text}</p>
+      <p className="mt-3 text-[16px] leading-relaxed text-ink md:text-[17px]">{entry.text}</p>
     </article>
   );
 }
 
-// The single default voice. When it cites fact-sheet numbers it becomes the
-// distinct gold "Analyst" card with a figure strip (Peak 1); otherwise it reads
-// as a lighter "Facilitator" reply.
-function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
-  const data = figures.length > 0;
+// The single default voice. Plain reply = "Facilitator"; when it cites
+// fact-sheet numbers it becomes the gold "Analyst" Exhibit (Peak 1 payoff).
+function FacilitatorVoice({ text, figures }: { text: string; figures: Figure[] }) {
+  if (figures.length === 0) {
+    return (
+      <div className="rise">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-ink-soft" />
+          <span className="kicker">Facilitator</span>
+        </div>
+        <p className="max-w-[72ch] text-[17px] leading-relaxed text-ink md:text-[18px]">{text}</p>
+      </div>
+    );
+  }
+  return <AnalystExhibit text={text} figures={figures} />;
+}
+
+// Signature element: the analyst answer as a designed financial exhibit.
+function AnalystExhibit({ text, figures }: { text: string; figures: Figure[] }) {
   return (
-    <article
-      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 p-4 md:p-5 ${
-        data ? "border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)]" : "border-l-2 border-[var(--rule)] pl-4"
+    <article className="rise border-2 border-gold bg-[oklch(0.976_0.026_86)]">
+      <div className="flex items-center justify-between border-b border-gold/40 px-5 py-3">
+        <span className="flex items-center gap-2">
+          <span className="h-2 w-2 bg-gold" />
+          <span className="kicker text-ink">Analyst · Live read</span>
+        </span>
+        <span className="kicker text-gold-deep">Audited · FY22–24</span>
+      </div>
+      <div className="px-5 py-5 md:px-6">
+        <p className="max-w-[72ch] text-[17px] leading-relaxed text-ink md:text-[18px]">{text}</p>
+        {figures.length > 0 && (
+          <div className="mt-6 grid grid-cols-2 border-l border-t border-rule sm:grid-cols-3">
+            {figures.map((f, i) => (
+              <FigureCell key={i} figure={f} />
+            ))}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function FigureCell({ figure }: { figure: Figure }) {
+  const key = /(deficit|gap|loss)/i.test(`${figure.label} ${figure.value}`);
+  return (
+    <div
+      className={`border-b border-r border-rule px-4 py-4 ${
+        key ? "bg-[oklch(0.965_0.05_85)]" : "bg-card/50"
       }`}
     >
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 ${data ? "bg-electric" : "bg-ink/40"}`} />
-        <span className="kicker">{data ? "Analyst · from the audited fact-sheet" : "Facilitator"}</span>
+      <div className="kicker text-[9px]">{figure.label}</div>
+      <div
+        className={`numeral mt-1.5 leading-none ${
+          key ? "text-[32px] text-gold-deep md:text-[40px]" : "text-[25px] text-ink md:text-[29px]"
+        }`}
+      >
+        {figure.value}
       </div>
-      <p className="mt-3 text-[16px] leading-relaxed md:text-[17px]">{text}</p>
-      {data && (
-        <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
-          {figures.map((f, i) => (
-            <div key={i} className="bg-card p-3">
-              <div className="kicker text-[9px]">{f.label}</div>
-              <div className="numeral mt-1 text-xl font-medium leading-none md:text-2xl">{f.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </article>
+      {key && <span className="mt-2.5 block h-[3px] w-10 bg-gold" />}
+    </div>
   );
 }
 
@@ -431,15 +528,15 @@ function Composer({
   thinking: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 border-t hairline bg-card pt-4">
-      {/* One voice by default. This asks the facilitator who you want to hear from. */}
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+    <div className="sticky bottom-0 border-t border-rule-strong bg-card/95 pt-4 backdrop-blur-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={onConvene}
           disabled={thinking}
-          className="border hairline px-3.5 py-1.5 text-[11px] font-medium uppercase tracking-wider transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+          className="group inline-flex items-center gap-2 border border-rule px-4 py-2 transition-colors hover:border-gold hover:bg-[oklch(0.965_0.05_85)] disabled:opacity-40"
         >
-          ⚖ Convene the council
+          <span className="h-1.5 w-1.5 bg-gold transition-transform group-hover:scale-125" />
+          <span className="kicker text-ink">Convene the council</span>
         </button>
         <span className="kicker">one voice by default · you choose who weighs in</span>
       </div>
@@ -450,14 +547,14 @@ function Composer({
         onKeyDown={onKeyDown}
         rows={2}
         placeholder="Ask for a number, state a direction, or talk to the room…"
-        className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
+        className="w-full resize-none border border-rule bg-paper px-4 py-3.5 text-[16px] leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-soft/70 focus:border-gold-deep"
       />
-      <div className="mt-2.5 flex items-center justify-between pb-1">
+      <div className="mt-3 flex items-center justify-between pb-1">
         <span className="kicker">Enter to send · Shift+Enter for a new line</span>
         <button
           onClick={onSend}
           disabled={thinking || !input.trim()}
-          className="bg-electric px-6 py-2.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="bg-gold px-7 py-3 text-[12px] font-bold uppercase tracking-[0.12em] text-ink transition-all hover:brightness-[1.04] disabled:opacity-40"
         >
           {thinking ? "…" : "Send →"}
         </button>
@@ -466,7 +563,8 @@ function Composer({
   );
 }
 
-/* Lightweight markdown renderer for the case text (headings, lists, bold, rules). */
+/* ---------- case text renderer (headings, lists, bold, rules) ---------- */
+
 function CaseText({ text }: { text: string }) {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
@@ -475,10 +573,10 @@ function CaseText({ text }: { text: string }) {
   const flushList = (key: string) => {
     if (!list.length) return;
     out.push(
-      <ol key={key} className="mt-2 space-y-2.5">
+      <ol key={key} className="mt-3 space-y-3">
         {list.map((item, i) => (
-          <li key={i} className="flex gap-3 text-[16px] leading-relaxed md:text-[17px]">
-            <span className="numeral text-xl text-electric">{i + 1}</span>
+          <li key={i} className="flex gap-4 text-[16px] leading-relaxed text-ink md:text-[17px]">
+            <span className="numeral text-[22px] leading-none text-gold-deep">{i + 1}</span>
             <span>{renderInline(item.replace(/^\d+\.\s*/, ""))}</span>
           </li>
         ))}
@@ -497,15 +595,16 @@ function CaseText({ text }: { text: string }) {
     if (!line.trim()) return;
     if (line.startsWith("### ")) {
       out.push(
-        <h3 key={i} className="kicker mt-6 text-[11px] first:mt-0">
-          {line.slice(4)}
-        </h3>
+        <div key={i} className="mt-8 first:mt-0">
+          <span className="mb-2 block h-px w-9 bg-gold" />
+          <h3 className="kicker text-ink">{line.slice(4)}</h3>
+        </div>
       );
     } else if (line.startsWith("---")) {
-      out.push(<div key={i} className="my-5 h-px bg-[var(--rule)]" />);
+      out.push(<div key={i} className="my-6 h-px bg-rule" />);
     } else {
       out.push(
-        <p key={i} className="mt-3 text-[16px] leading-relaxed md:text-[17px]">
+        <p key={i} className="mt-4 text-[17px] leading-[1.7] text-ink md:text-[18px]">
           {renderInline(line)}
         </p>
       );

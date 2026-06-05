@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -10,6 +10,7 @@
   --radius-xl: 0px;
   --radius-2xl: 0px;
   --radius-3xl: 0px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -29,64 +30,139 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* IEDC institutional-luxury palette */
   --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
   --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
   --color-rule: var(--rule);
-  --color-electric: var(--electric);
-  --color-gold: var(--electric);
-  --font-display: "Inter Tight", "Helvetica Neue", system-ui, sans-serif;
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-rule-strong: var(--rule-strong);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-electric: var(--gold);
+
+  --font-display: "Fraunces", "Times New Roman", Georgia, serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-body: "Hanken Grotesk", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "Hanken Grotesk", system-ui, sans-serif;
 }
 
 :root {
   --radius: 0;
 
-  /* IEDC-Bled palette: cream surface, warm charcoal-brown ink, golden-yellow accent */
-  --paper: oklch(0.974 0.013 83);     /* warm off-white / cream surface */
-  --ink: oklch(0.235 0.022 60);       /* warm charcoal-brown — the "human" colour */
-  --rule: oklch(0.87 0.014 72);       /* hairline, warm light brown-grey */
-  --electric: oklch(0.80 0.155 84);   /* IEDC golden yellow — ignites only at key moments */
+  /* surfaces — warm cream, layered */
+  --paper: oklch(0.972 0.014 84);
+  --paper-2: oklch(0.948 0.020 82);
+  --card: oklch(0.993 0.006 86);
+
+  /* ink — warm charcoal-brown */
+  --ink: oklch(0.245 0.024 58);
+  --ink-soft: oklch(0.455 0.022 60);
+
+  /* hairlines */
+  --rule: oklch(0.852 0.018 76);
+  --rule-strong: oklch(0.72 0.024 70);
+
+  /* IEDC gold — fill (bright) + deep (legible on cream as text) */
+  --gold: oklch(0.805 0.155 83);
+  --gold-deep: oklch(0.585 0.128 64);
 
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(0.992 0.006 85);      /* warm near-white inset */
   --card-foreground: var(--ink);
-  --popover: oklch(0.992 0.006 85);
+  --popover: var(--card);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
-  --secondary: oklch(0.945 0.013 80); /* warm cream-grey */
+  --secondary: var(--paper-2);
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.945 0.013 80);
-  --muted-foreground: oklch(0.50 0.022 60); /* warm mid-brown */
-  --accent: var(--electric);
-  --accent-foreground: var(--ink);    /* charcoal-brown text on gold reads cleanly */
+  --muted: var(--paper-2);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--gold);
+  --accent-foreground: var(--ink);
   --destructive: oklch(0.52 0.18 32);
   --destructive-foreground: oklch(0.99 0.005 85);
   --border: var(--rule);
   --input: var(--rule);
-  --ring: var(--ink);
+  --ring: var(--gold-deep);
 }
 
-html, body, #root { background: var(--paper); color: var(--ink); }
+html,
+body,
+#root {
+  background: var(--paper);
+  color: var(--ink);
+}
+
 body {
-  font-family: var(--font-display);
-  font-feature-settings: "ss01", "cv11";
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background-color: var(--paper);
+  background-image: radial-gradient(115% 75% at 50% -10%, oklch(0.996 0.012 88) 0%, transparent 55%);
+  background-attachment: fixed;
 }
 
-.numeral { font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
-.hairline { border-color: var(--rule); }
-.kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); opacity: 0.6; }
+/* Display / editorial type */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+.tagline {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  font-optical-sizing: auto;
+}
+.numeral {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+.kicker {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.hairline {
+  border-color: var(--rule);
+}
 
-/* Serif-italic accent — echoes IEDC's "A School with a View" tagline voice. */
-.serif { font-family: var(--font-serif); }
-.tagline { font-family: var(--font-serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+/* Editorial drop cap for the case opening paragraph */
+.case-prose > p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 3.4em;
+  line-height: 0.74;
+  float: left;
+  margin: 0.06em 0.09em 0 0;
+  color: var(--gold-deep);
+}
 
-/* Respect reduced-motion across the whole app. */
+/* One orchestrated entrance */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
