@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { MENTORS, type TranscriptEntry, type Figure } from "@/lib/simulator-data";
+import { MENTORS, type TranscriptEntry, type Figure, type Summon } from "@/lib/simulator-data";
 import { getCase, sendTurn } from "@/lib/simulator-client";
 
 export const Route = createFileRoute("/")({
@@ -105,7 +105,7 @@ function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () =
     <section className="pt-7">
       <div className="kicker">The brief / 00</div>
       <h2 className="tagline mt-2 max-w-2xl text-2xl leading-snug md:text-[28px]">
-        You are an IEDC graduate and senior operator. Today, you sit in the president's seat.
+        You sit in the president's seat at IEDC.
       </h2>
 
       <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-3">
@@ -185,19 +185,18 @@ function Conversation({ caseText }: { caseText: string }) {
     endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
   }, [transcript, thinking]);
 
-  async function send() {
-    const text = input.trim();
+  async function runTurn(text: string, summon?: Summon) {
     if (!text || thinking) return;
     const snapshot = transcript; // history = turns BEFORE this message
     setTranscript((t) => [...t, { kind: "participant", text }]);
     setInput("");
     setThinking(true);
     try {
-      const res = await sendTurn(text, snapshot);
+      const res = await sendTurn(text, snapshot, summon);
       const additions: TranscriptEntry[] = [];
+      if (res.reply?.text)
+        additions.push({ kind: "facilitator", text: res.reply.text, figures: res.reply.figures ?? [] });
       if (res.note) additions.push({ kind: "note", text: res.note });
-      if (res.analyst?.spoke && res.analyst.answer)
-        additions.push({ kind: "analyst", text: res.analyst.answer, figures: res.analyst.figures ?? [] });
       for (const c of res.council ?? [])
         additions.push({ kind: "council", id: c.id, name: c.name, school: c.school, text: c.message });
       setTranscript((t) => [...t, ...additions]);
@@ -206,6 +205,24 @@ function Conversation({ caseText }: { caseText: string }) {
     } finally {
       setThinking(false);
     }
+  }
+
+  function send() {
+    runTurn(input.trim());
+  }
+
+  // Explicit summon via the UI control. Uses the typed text if present, else a
+  // sensible default message for the chosen mode.
+  function summonCouncil(mode: Summon) {
+    if (thinking) return;
+    const typed = input.trim();
+    const fallback =
+      mode === "all"
+        ? "Full council — tear this apart. I want to hear all five."
+        : mode === "auto"
+        ? "Council, weigh in on this."
+        : `${MENTORS.find((m) => m.id === mode)?.name ?? "Mentor"}, what's your read?`;
+    runTurn(typed || fallback, mode);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -241,7 +258,14 @@ function Conversation({ caseText }: { caseText: string }) {
           <div ref={endRef} />
         </div>
 
-        <Composer input={input} setInput={setInput} onSend={send} onKeyDown={onKeyDown} thinking={thinking} />
+        <Composer
+          input={input}
+          setInput={setInput}
+          onSend={send}
+          onKeyDown={onKeyDown}
+          onSummon={summonCouncil}
+          thinking={thinking}
+        />
       </section>
     </div>
   );
@@ -252,9 +276,10 @@ function EmptyState() {
     <div className="border hairline p-5">
       <p className="tagline text-lg">The floor is yours.</p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Read the case on the left, then respond in your own words. Ask for any number or analysis
-        (“show me the three-year financial trend”), state a direction, or address the council
-        (“Operator, how would this actually get built?”).
+        Read the case on the left, then respond in your own words — you'll get one direct reply, like a
+        real conversation. Ask for any number or analysis (“show me the three-year financial trend”), or
+        state a direction. When you want pushback, <span className="text-ink">summon the council</span>{" "}
+        below — or just say so (“council, tear this apart”).
       </p>
     </div>
   );
@@ -287,8 +312,8 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
       </p>
     );
   }
-  if (entry.kind === "analyst") {
-    return <AnalystCard text={entry.text} figures={entry.figures} />;
+  if (entry.kind === "facilitator") {
+    return <ReplyCard text={entry.text} figures={entry.figures} />;
   }
   // council
   const accent = entry.id === "ethicalChallenger";
@@ -310,15 +335,23 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
   );
 }
 
-function AnalystCard({ text, figures }: { text: string; figures: Figure[] }) {
+// The single default voice. When it cites fact-sheet numbers it becomes the
+// distinct gold "Analyst" card with a figure strip (Peak 1); otherwise it reads
+// as a lighter "Facilitator" reply.
+function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
+  const data = figures.length > 0;
   return (
-    <article className="animate-in fade-in slide-in-from-bottom-2 duration-450 border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)] p-4 md:p-5">
+    <article
+      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 p-4 md:p-5 ${
+        data ? "border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)]" : "border-l-2 border-[var(--rule)] pl-4"
+      }`}
+    >
       <div className="flex items-center gap-2">
-        <span className="h-2 w-2 bg-electric" />
-        <span className="kicker">World / Analyst · from the audited fact-sheet</span>
+        <span className={`h-2 w-2 ${data ? "bg-electric" : "bg-ink/40"}`} />
+        <span className="kicker">{data ? "Analyst · from the audited fact-sheet" : "Facilitator"}</span>
       </div>
       <p className="mt-3 text-[16px] leading-relaxed md:text-[17px]">{text}</p>
-      {figures.length > 0 && (
+      {data && (
         <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
           {figures.map((f, i) => (
             <div key={i} className="bg-card p-3">
@@ -337,26 +370,44 @@ function Composer({
   setInput,
   onSend,
   onKeyDown,
+  onSummon,
   thinking,
 }: {
   input: string;
   setInput: (v: string) => void;
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSummon: (mode: Summon) => void;
   thinking: boolean;
 }) {
   return (
     <div className="sticky bottom-0 border-t hairline bg-card pt-4">
+      {/* Council on tap — single voice stays the default; these summon mentors. */}
+      <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+        <span className="kicker mr-1">Summon</span>
+        <SummonChip label="Council" onClick={() => onSummon("auto")} thinking={thinking} />
+        {MENTORS.map((m) => (
+          <SummonChip
+            key={m.id}
+            label={m.name.replace(/^The /, "")}
+            accent={m.id === "ethicalChallenger"}
+            onClick={() => onSummon(m.id)}
+            thinking={thinking}
+          />
+        ))}
+        <SummonChip label="Full council" emphasis onClick={() => onSummon("all")} thinking={thinking} />
+      </div>
+
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={onKeyDown}
         rows={2}
-        placeholder="Ask for a number, state a direction, or address a mentor…"
+        placeholder="Ask for a number, state a direction, or talk to the room…"
         className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
       />
       <div className="mt-2.5 flex items-center justify-between pb-1">
-        <span className="kicker">Enter to send · Shift+Enter for a new line</span>
+        <span className="kicker">Enter to send · Shift+Enter for a new line · one voice by default</span>
         <button
           onClick={onSend}
           disabled={thinking || !input.trim()}
@@ -366,6 +417,35 @@ function Composer({
         </button>
       </div>
     </div>
+  );
+}
+
+function SummonChip({
+  label,
+  onClick,
+  thinking,
+  emphasis,
+  accent,
+}: {
+  label: string;
+  onClick: () => void;
+  thinking: boolean;
+  emphasis?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={thinking}
+      className={`border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors disabled:opacity-40 ${
+        emphasis
+          ? "border-[var(--electric)] bg-[oklch(0.97_0.03_85)] hover:bg-electric hover:text-ink"
+          : "hairline hover:bg-ink hover:text-paper"
+      }`}
+    >
+      {accent && <span className="mr-1 text-electric">●</span>}
+      {label}
+    </button>
   );
 }
 
