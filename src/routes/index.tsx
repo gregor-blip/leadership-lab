@@ -188,12 +188,13 @@ function BriefPoint({ n, title, children }: { n: string; title: string; children
   );
 }
 
-/* ---------- conversation: case (left) + chat (right) ---------- */
+/* ---------- conversation: collapsible case bar on top + full-width chat ---------- */
 
 function Conversation({ caseText }: { caseText: string }) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [caseOpen, setCaseOpen] = useState(true); // open to read first; auto-collapses on first turn
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -206,6 +207,7 @@ function Conversation({ caseText }: { caseText: string }) {
   async function runTurn(text: string) {
     if (!text || thinking) return;
     const snapshot = transcript; // history = turns BEFORE this message
+    if (snapshot.length === 0) setCaseOpen(false); // collapse the case once we start
     setTranscript((t) => [...t, { kind: "participant", text }]);
     setInput("");
     setThinking(true);
@@ -252,20 +254,15 @@ function Conversation({ caseText }: { caseText: string }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-0 pt-6 lg:grid-cols-12">
-      {/* CASE — stays visible, sized for projection */}
-      <section className="lg:col-span-5 lg:border-r hairline lg:pr-7">
-        <div className="kicker">The case / 01 · IEDC–Poslovna šola Bled</div>
-        <div className="mt-3 max-h-none lg:max-h-[68vh] lg:overflow-y-auto lg:pr-2">
-          <CaseText text={caseText} />
-        </div>
-      </section>
+    <div className="pt-6">
+      {/* CASE — collapsible bar on top; expand any time to re-read it */}
+      <CaseBar open={caseOpen} onToggle={() => setCaseOpen((o) => !o)} caseText={caseText} />
 
-      {/* CONVERSATION */}
-      <section className="mt-8 lg:col-span-7 lg:mt-0 lg:pl-7">
+      {/* CONVERSATION — full width, owns the screen */}
+      <section className="mt-6">
         <div className="flex items-center justify-between border-b hairline pb-3">
           <div className="kicker">The conversation / 02</div>
-          <div className="kicker text-muted-foreground">Talk freely · ask · decide · summon</div>
+          <div className="kicker text-muted-foreground">Talk freely · ask · decide · convene</div>
         </div>
 
         <div className="space-y-4 py-5">
@@ -290,12 +287,46 @@ function Conversation({ caseText }: { caseText: string }) {
   );
 }
 
+// The case as a collapsible bar at the top of the conversation.
+function CaseBar({
+  open,
+  onToggle,
+  caseText,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  caseText: string;
+}) {
+  return (
+    <div className="border hairline">
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50"
+      >
+        <span className="kicker">The case · IEDC–Poslovna šola Bled</span>
+        <span className="kicker flex items-center gap-2 text-muted-foreground">
+          {open ? "Hide" : "Read the case"}
+          <span aria-hidden className="text-ink">{open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="max-h-[58vh] overflow-y-auto border-t hairline px-5 py-6">
+          <div className="mx-auto max-w-3xl">
+            <CaseText text={caseText} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
     <div className="border hairline p-5">
       <p className="tagline text-lg">The floor is yours.</p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Read the case on the left, then respond in your own words — you'll get one direct reply, like a
+        Read the case above, then respond in your own words — you'll get one direct reply, like a
         real conversation. Ask for any number or analysis (“show me the three-year financial trend”), or
         state a direction. When you want pushback, <span className="text-ink">summon the council</span>{" "}
         below — or just say so (“council, tear this apart”).
