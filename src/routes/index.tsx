@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { MENTORS, type TranscriptEntry, type Figure, type Summon } from "@/lib/simulator-data";
+import { MENTORS, PARTICIPANT, type TranscriptEntry, type Figure } from "@/lib/simulator-data";
 import { getCase, sendTurn } from "@/lib/simulator-client";
 
 export const Route = createFileRoute("/")({
@@ -93,8 +93,26 @@ function Header() {
           Not a quiz — an intelligence you talk to, command, and argue with.
         </div>
       </div>
-      <span className="kicker shrink-0 border hairline px-2.5 py-1.5">Concept prototype</span>
+      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+        <ParticipantBadge />
+        <span className="kicker border hairline px-2.5 py-1.5">Concept prototype</span>
+      </div>
     </header>
+  );
+}
+
+// The logged-in student this case is assigned to.
+function ParticipantBadge() {
+  return (
+    <div className="flex items-center gap-2.5 border hairline px-3 py-1.5">
+      <span className="text-lg leading-none" aria-hidden>
+        {PARTICIPANT.flag}
+      </span>
+      <div className="leading-tight">
+        <div className="text-sm font-medium tracking-tight">{PARTICIPANT.name}</div>
+        <div className="kicker text-[9px]">Logged in · {PARTICIPANT.country}</div>
+      </div>
+    </div>
   );
 }
 
@@ -185,14 +203,14 @@ function Conversation({ caseText }: { caseText: string }) {
     endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
   }, [transcript, thinking]);
 
-  async function runTurn(text: string, summon?: Summon) {
+  async function runTurn(text: string) {
     if (!text || thinking) return;
     const snapshot = transcript; // history = turns BEFORE this message
     setTranscript((t) => [...t, { kind: "participant", text }]);
     setInput("");
     setThinking(true);
     try {
-      const res = await sendTurn(text, snapshot, summon);
+      const res = await sendTurn(text, snapshot);
       const additions: TranscriptEntry[] = [];
       if (res.reply?.text)
         additions.push({ kind: "facilitator", text: res.reply.text, figures: res.reply.figures ?? [] });
@@ -211,18 +229,19 @@ function Conversation({ caseText }: { caseText: string }) {
     runTurn(input.trim());
   }
 
-  // Explicit summon via the UI control. Uses the typed text if present, else a
-  // sensible default message for the chosen mode.
-  function summonCouncil(mode: Summon) {
+  // "Convene the council" — the facilitator asks who the participant wants to
+  // hear from. No backend call; the participant then names them in plain
+  // language and the orchestrator returns exactly those mentors.
+  function convene() {
     if (thinking) return;
-    const typed = input.trim();
-    const fallback =
-      mode === "all"
-        ? "Full council — tear this apart. I want to hear all five."
-        : mode === "auto"
-        ? "Council, weigh in on this."
-        : `${MENTORS.find((m) => m.id === mode)?.name ?? "Mentor"}, what's your read?`;
-    runTurn(typed || fallback, mode);
+    setTranscript((t) => [
+      ...t,
+      {
+        kind: "facilitator",
+        text: "Who would you like to hear from — one of them, a few, or the full council? Name them and I'll bring them in.",
+        figures: [],
+      },
+    ]);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -263,7 +282,7 @@ function Conversation({ caseText }: { caseText: string }) {
           setInput={setInput}
           onSend={send}
           onKeyDown={onKeyDown}
-          onSummon={summonCouncil}
+          onConvene={convene}
           thinking={thinking}
         />
       </section>
@@ -370,32 +389,28 @@ function Composer({
   setInput,
   onSend,
   onKeyDown,
-  onSummon,
+  onConvene,
   thinking,
 }: {
   input: string;
   setInput: (v: string) => void;
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onSummon: (mode: Summon) => void;
+  onConvene: () => void;
   thinking: boolean;
 }) {
   return (
     <div className="sticky bottom-0 border-t hairline bg-card pt-4">
-      {/* Council on tap — single voice stays the default; these summon mentors. */}
-      <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
-        <span className="kicker mr-1">Summon</span>
-        <SummonChip label="Council" onClick={() => onSummon("auto")} thinking={thinking} />
-        {MENTORS.map((m) => (
-          <SummonChip
-            key={m.id}
-            label={m.name.replace(/^The /, "")}
-            accent={m.id === "ethicalChallenger"}
-            onClick={() => onSummon(m.id)}
-            thinking={thinking}
-          />
-        ))}
-        <SummonChip label="Full council" emphasis onClick={() => onSummon("all")} thinking={thinking} />
+      {/* One voice by default. This asks the facilitator who you want to hear from. */}
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <button
+          onClick={onConvene}
+          disabled={thinking}
+          className="border hairline px-3.5 py-1.5 text-[11px] font-medium uppercase tracking-wider transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+        >
+          ⚖ Convene the council
+        </button>
+        <span className="kicker">one voice by default · you choose who weighs in</span>
       </div>
 
       <textarea
@@ -407,7 +422,7 @@ function Composer({
         className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
       />
       <div className="mt-2.5 flex items-center justify-between pb-1">
-        <span className="kicker">Enter to send · Shift+Enter for a new line · one voice by default</span>
+        <span className="kicker">Enter to send · Shift+Enter for a new line</span>
         <button
           onClick={onSend}
           disabled={thinking || !input.trim()}
@@ -417,35 +432,6 @@ function Composer({
         </button>
       </div>
     </div>
-  );
-}
-
-function SummonChip({
-  label,
-  onClick,
-  thinking,
-  emphasis,
-  accent,
-}: {
-  label: string;
-  onClick: () => void;
-  thinking: boolean;
-  emphasis?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={thinking}
-      className={`border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors disabled:opacity-40 ${
-        emphasis
-          ? "border-[var(--electric)] bg-[oklch(0.97_0.03_85)] hover:bg-electric hover:text-ink"
-          : "hairline hover:bg-ink hover:text-paper"
-      }`}
-    >
-      {accent && <span className="mr-1 text-electric">●</span>}
-      {label}
-    </button>
   );
 }
 
