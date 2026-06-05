@@ -1,44 +1,30 @@
+## Plan: Store mentor system prompts verbatim in the Edge Function
 
-# AI Leadership Simulator — Build Plan (revised)
+Add six string constants to `supabase/functions/simulator/index.ts` (the existing Edge Function — note: the user called it `simulate`, but the function in the repo is `simulator`; I'll add the constants there and confirm the location).
 
-Two changes from v1, everything else unchanged and approved.
+### What I'll add
 
-## Changes from v1
+At the top of `supabase/functions/simulator/index.ts`, just below the existing imports/CORS block, add:
 
-- **Runtime model**: Edge Function calls **`claude-sonnet-4-6`** (Claude Sonnet 4.6 — verified current latest via Anthropic's models overview). Endpoint `https://api.anthropic.com/v1/messages`, `anthropic-version: 2023-06-01`, JSON-only system instruction.
-- **Design**: light Swiss-modernist, not dark/slate.
+1. `const SHARED_PREAMBLE = \`...\`` — the shared preamble text, verbatim.
+2. `const MENTOR_PROMPTS = { disruptor: \`...\`, operator: \`...\`, contrarian: \`...\`, systemsThinker: \`...\`, ethicalChallenger: \`...\` }` — each mentor's block, verbatim.
 
-## Design system (revised)
+Rules I will follow:
+- Copy each block character-for-character from your message. No rephrasing, trimming, or "cleanup".
+- Use backtick template literals so apostrophes, em-dashes, and quotes are preserved as-is. No escaping beyond what backticks require (backticks themselves and `${` — none appear in your text).
+- Section header lines (e.g. `=== THE DISRUPTOR ===`) are NOT part of the block bodies — they're delimiters in your message. Each constant's body starts at the first content line after the header and ends at the blank line before the next `===` header. If you want the `=== ... ===` headers included inside the strings, tell me and I'll include them.
+- These constants stay server-side only. They are not returned in any response and not imported by frontend code.
 
-Light, editorial, document-like — built to sit next to your other application papers.
+### Wiring (not changing behavior yet, just storing)
 
-- **Surfaces**: off-white page (`oklch(0.985 0.003 90)` — warm paper), pure white inset cards, hairline `1px` rules in near-black at ~12% opacity. No drop shadows on content; one soft shadow only on the outer device chrome.
-- **Ink**: near-black `oklch(0.18 0.01 270)` for body, true black for display numerals.
-- **Accent**: a single electric accent used sparingly — primary buttons, active slider track, selected meter index, mentor archetype dot. Default proposal: **electric vermilion** `oklch(0.62 0.24 28)`. (If you'd rather have signal blue or chartreuse, say so before I commit tokens.)
-- **Type**: **Inter Tight** for UI/body, **Space Grotesk** (or **Söhne**-alike via Inter Display) for section labels in ALL-CAPS tracked-out micro, and **oversized tabular numerals** (Inter with `font-feature-settings: "tnum"`) for meter values — 56–72px, true black, weight 500.
-- **Grid**: strict 12-column with 24px gutters on desktop, hairline column dividers visible on the simulator card. Section headers numbered `01 / PROFILE`, `02 / SIMULATOR`, `03 / MENTORS` in micro-caps.
-- **Chrome**: a thin off-white outer frame with a single hairline border, rounded `xl`, no gradient — reads like a printed document with a window cut.
-- **Mentor accents**: replaced with small filled circles + label, all five using neutral inks except a single accent dot — keeps the page calm; the accent stays scarce.
-- All values defined as oklch tokens in `src/styles.css` under `:root` + `@theme inline`. No raw color classes in components.
+This step ONLY stores the constants. I will not yet change how `action: "react"` builds its system prompt. Once stored, the intended usage (for a later step) is: for each mentor, system prompt = `SHARED_PREAMBLE + "\n\n" + MENTOR_PROMPTS[mentorKey]`.
 
-## Everything else (unchanged from v1, approved)
+Note: the current Edge Function uses 4 mentors (Strategist/Realist/Ethicist/Skeptic) and an action called `react`. Your spec has 5 mentors (Disruptor/Operator/Contrarian/Systems-Thinker/Ethical Challenger) and mentions an action called `resolve`. I'll leave the existing mentor wiring + action name alone in this step and only add the constants. Switching the function over to the 5-mentor model + `resolve` action is a separate change I can do next if you confirm.
 
-- Enable Lovable Cloud; create Edge Function `simulate` with two actions (`scenario`, `resolve`); CORS + `verify_jwt = false`.
-- Prompt you to add `ANTHROPIC_API_KEY` as a Supabase secret via the secret tool (don't paste it in chat).
-- Single route `/` with three-column desktop layout (Profile / Simulator / Mentors), stacked tabs on mobile, inside the document chrome.
-- Components: `AppChrome`, `ProfilePanel` (view + edit, Marko seed), `SimulatorPanel` (meters, scenario, free-text + suggested buttons, consequence, Next), `MeterCard`, `MentorsPanel` (5 archetypes with framing line).
-- State machine: scenario → resolve → next, 3 rounds, then wrap-up. In-memory only; "Reset run" clears state.
-- Toast on 402/429 from Anthropic. All prompts live server-side.
+### Verification
 
-## Build order
+After the edit I will:
+1. Print the exact constant block back to you in chat (copy-pasted from the file) so you can verify nothing was reworded.
+2. Confirm the file path and approximate line range where the block lives.
 
-1. Enable Lovable Cloud.
-2. Light Swiss design tokens in `src/styles.css` + fonts.
-3. Edge Function scaffold (`supabase/functions/simulate/index.ts` + `config.toml`) calling `claude-sonnet-4-6`, with a graceful fallback response when the key is absent.
-4. Prompt for `ANTHROPIC_API_KEY` via the secret tool.
-5. `AppChrome` + page shell.
-6. `ProfilePanel` with Marko seed + edit mode.
-7. `SimulatorPanel` + `MeterCard`.
-8. `MentorsPanel`.
-9. Wire state + Edge Function calls + loading/toasts.
-10. QA the full 3-round flow in the preview.
+No other files change.
