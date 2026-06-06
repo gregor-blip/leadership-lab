@@ -214,6 +214,7 @@ ${FACT_SHEET}
 
 === STYLE — you are read live on a PROJECTOR ===
 Write to be SCANNED by a room. Lead with the answer (for data) or the question (for judgment). Keep paragraphs to 2–3 short sentences. When you enumerate, use a MARKDOWN bullet list ("- item"). Use **bold** for the single key term. Every text field is rendered as markdown.
+- TABLES: use a markdown table ONLY when the data is genuinely tabular and benefits from columns (e.g. a cost breakdown: line / amount / %). For just 2-3 data points, prefer a short bullet list, not a table. Keep tables to 2-3 columns max (projector-legible, never wide). Format as proper GitHub markdown: a header row, a |---|---| separator row, then ONE row per line. Numbers stay exact (Tier 1 fact-sheet lock).
 
 === SHARED STATE ===
 You maintain a distilled running state of the conversation — NOT the transcript. After this turn, return the updated state object:

@@ -57,7 +57,7 @@ const PREVIEW_SEED: TranscriptEntry[] = [
   { kind: "participant", text: "Before I decide anything, show me the three-year trend on executive-programme revenue and margin." },
   {
     kind: "facilitator",
-    text: "Here is the audited picture for the executive-education line, FY2022 to FY2024. Revenue is roughly flat while the contribution margin has slipped four points, almost entirely from rising delivery cost per participant.",
+    text: "Here is the audited picture for the executive-education line, FY2022 to FY2024. Revenue is roughly flat while the contribution margin has slipped four points, almost entirely from rising delivery cost per participant.\n\n**IEDC cost base, 2024 (€)**\n\n| Line | Amount | % of base |\n|---|---|---|\n| Materials + services | 1,213,648 | 53% |\n| Labour | 851,588 | 37% |\n| Amortization | 105,020 | 5% |\n| Other + financial | 113,016 | 5% |\n| **Total** | **2,283,272** | **100%** |",
     figures: [
       { label: "Exec revenue FY24", value: "€6.41M" },
       { label: "3-yr revenue CAGR", value: "+1.2%" },
@@ -228,7 +228,7 @@ function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () =
             You sit in the <span className="em">president&rsquo;s seat</span> at IEDC.
           </h2>
           <p className="mt-5 max-w-[42ch] text-[16px] leading-relaxed text-ink-soft">
-            One real decision, incomplete information, and a room that will not agree with you. There is no
+            One real decision, incomplete information, and a council that will not agree with you. There is no
             score and no right answer. The conversation is the product.
           </p>
         </div>
@@ -317,14 +317,20 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   const [thinking, setThinking] = useState(false);
   const [caseOpen, setCaseOpen] = useState(!(seed && seed.length)); // open to read first; collapsed when pre-seeded
   const [convState, setConvState] = useState<ConvState>(EMPTY_STATE); // distilled shared state, injected into personas
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const sentRef = useRef<HTMLDivElement | null>(null);
 
+  // On send, bring the participant's just-sent message to the top so it is
+  // immediately visible with room for the reply to stream in below it (standard
+  // chat behavior). We only re-anchor when the participant just sent; replies and
+  // council cards then flow in below the anchored message, never hiding it.
   useEffect(() => {
+    const last = transcript[transcript.length - 1];
+    if (last?.kind !== "participant") return;
     const reduce =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
-  }, [transcript, thinking]);
+    sentRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [transcript]);
 
   async function runTurn(text: string) {
     if (!text || thinking) return;
@@ -348,7 +354,7 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
         await runCouncil(ids, text, running, nextState);
       }
     } catch (e) {
-      toast.error("The room went quiet", { description: String((e as any)?.message ?? e) });
+      toast.error("Couldn't get a reply", { description: String((e as any)?.message ?? e) });
     } finally {
       setThinking(false);
     }
@@ -440,13 +446,17 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
 
         <div className="mx-auto max-w-[820px] space-y-5 py-7">
           {transcript.length === 0 && !thinking && <EmptyState />}
-          {transcript.map((e, i) => (
-            <ItemBoundary key={i}>
-              <TranscriptItem entry={e} index={i} />
-            </ItemBoundary>
-          ))}
+          {transcript.map((e, i) => {
+            const anchor = i === transcript.length - 1 && e.kind === "participant";
+            return (
+              <ItemBoundary key={i}>
+                <div ref={anchor ? sentRef : undefined} className="scroll-mt-6">
+                  <TranscriptItem entry={e} index={i} />
+                </div>
+              </ItemBoundary>
+            );
+          })}
           {thinking && <Thinking />}
-          <div ref={endRef} />
         </div>
 
         <Composer
@@ -514,7 +524,7 @@ function Thinking() {
         <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.2s]" />
         <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.4s]" />
       </span>
-      <span className="kicker">The room is thinking</span>
+      <span className="kicker">Thinking…</span>
     </div>
   );
 }
@@ -637,7 +647,7 @@ function Composer({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
             rows={2}
-            placeholder="Ask for a number, state a direction, or talk to the room…"
+            placeholder="Ask for a number, state a direction, or talk it through…"
             className="w-full resize-none bg-transparent px-4 pb-2 pt-3.5 text-[16px] leading-relaxed text-ink outline-none placeholder:text-ink-mute"
           />
           <div className="flex items-center justify-between px-4 pb-3">
@@ -793,6 +803,58 @@ function renderInline(text: string): React.ReactNode {
   });
 }
 
+// Does a cell read as a number (so it should right-align with tabular figures)?
+function isNum(s: string): boolean {
+  const t = String(s ?? "").trim().replace(/\*\*/g, "");
+  if (!t) return false;
+  return /^[~≈]?\s*[+\-(]?\s*[€$£]?\s*\d[\d.,\s]*\s*[%€$£kKmMbBn)]*$/.test(t);
+}
+
+// Styled GFM table, matched to the Analyst-exhibit look: mono kicker header with
+// a gold underline, hairline rows, numeric columns right-aligned in tabular mono,
+// padded for projector legibility, and horizontally scrollable as a safety net.
+function MdTable({ header, rows }: { header: string[]; rows: string[][] }) {
+  const cols = header.length;
+  const numeric = Array.from({ length: cols }, (_, c) => {
+    const vals = rows.map((r) => (r[c] ?? "").trim()).filter(Boolean);
+    return vals.length > 0 && vals.every((v) => isNum(v));
+  });
+  return (
+    <div className="my-3.5 overflow-x-auto">
+      <table className="w-full border-collapse text-[15px] md:text-[16px]">
+        <thead>
+          <tr className="border-b border-gold-line/40">
+            {header.map((h, c) => (
+              <th
+                key={c}
+                className={`kicker px-3 py-2 align-bottom text-[10px] ${numeric[c] ? "text-right" : "text-left"}`}
+              >
+                {renderInline(h)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={ri} className="border-b border-hair last:border-b-0">
+              {Array.from({ length: cols }, (_, c) => (
+                <td
+                  key={c}
+                  className={`px-3 py-2 align-top text-ink ${
+                    numeric[c] ? "numeral text-right tabular-nums" : "text-left"
+                  }`}
+                >
+                  {renderInline(r[c] ?? "")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /* Lightweight markdown for AI message bodies (Facilitator / Analyst / council):
    paragraphs, bullet + numbered lists, headings as bold, inline bold/italic/code.
    Carried over from PR #5 (projector short-form output) and styled to the gold
@@ -836,8 +898,29 @@ function Markdown({ text }: { text: string }) {
     list = null;
   };
 
-  lines.forEach((raw, i) => {
-    const line = raw.trim();
+  const isRow = (s: string) => /^\|.*\|$/.test(s);
+  const isDelim = (s: string) => /^\|?[\s:|-]+\|?$/.test(s) && s.includes("-");
+  const toCells = (s: string) => s.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // GitHub-flavored markdown table: a header row, a |---| delimiter, then body rows.
+    if (isRow(line) && i + 1 < lines.length && isDelim(lines[i + 1].trim())) {
+      flushPara(`p${i}`);
+      flushList(`l${i}`);
+      const header = toCells(line);
+      let j = i + 2;
+      const trows: string[][] = [];
+      while (j < lines.length && isRow(lines[j].trim())) {
+        trows.push(toCells(lines[j].trim()));
+        j++;
+      }
+      blocks.push(<MdTable key={`t${i}`} header={header} rows={trows} />);
+      i = j - 1;
+      continue;
+    }
+
     const ul = line.match(/^[-*+]\s+(.*)$/);
     const ol = line.match(/^\d+\.\s+(.*)$/);
     if (ul) {
@@ -862,7 +945,7 @@ function Markdown({ text }: { text: string }) {
       const h = line.match(/^#{1,6}\s+(.*)$/);
       para.push(h ? `**${h[1]}**` : line);
     }
-  });
+  }
   flushPara("pend");
   flushList("lend");
 
