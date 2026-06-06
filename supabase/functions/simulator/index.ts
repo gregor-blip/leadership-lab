@@ -511,7 +511,10 @@ function checkApiKey(req: Request): boolean {
     Deno.env.get("SUPABASE_ANON_KEY") ??
     Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
     "";
-  if (!expected) return true; // fail-open only if env is misconfigured
+  if (!expected) {
+    console.error("[simulator] SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY not set — rejecting request");
+    return false; // fail-closed
+  }
   const provided =
     req.headers.get("apikey") ??
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
