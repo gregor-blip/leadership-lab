@@ -232,18 +232,65 @@ The five-mentor council is silent by default. Decide whether THIS message summon
 Council roster (ids):
 ${PERSONA_ROSTER}
 
-=== OUTPUT ===
-Return STRICT JSON and nothing else:
-{
-  "reply": { "text": "your single facilitator voice for this turn, markdown", "figures": [ { "label": "e.g. 2024 net loss", "value": "e.g. -€190,705" } ] },
-  "note": "optional ONE short stage line, or \"\"",
-  "state": { "decided": [], "rejected": [], "open": [], "direction": "" },
-  "summon": { "mode": "none|all|named|auto", "ids": [] }
-}
+=== HOW YOU REPLY ===
+Provide your turn by calling the "facilitator_turn" tool. Fill: reply.text (your single facilitator voice for this turn, in markdown), reply.figures (the short headline fact-sheet values you cited, e.g. "-€190,705" or "~€540k"; empty array if none), note (one short stage line, or ""), the updated state (decided / rejected / open / direction), and summon (mode + ids).
 RULES:
-- "reply.text" is ALWAYS present. figures: short headline values only (e.g. "~€540k"), explanation in reply.text; [] if none.
+- reply.text is ALWAYS present — it is your single default voice for the turn.
+- Give DATA freely (put the cited fact-sheet numbers in figures); WITHHOLD the decision.
 - On a JUDGMENT turn, reply.text ends with a question and does NOT state which door is right.
 - English only.`;
+
+// Synthesis runs as plain prose (no structured output needed), so it has its own
+// lightweight system prompt — keeps it robust and stops it emitting stray JSON.
+const SYNTH_SYSTEM = `You are the FACILITATOR of "IEDC Leadership Lab", synthesizing what the council just said for the decision-maker. Pull the threads together and name the REAL fault line between the mentors (for example: how fast to move vs what to sacrifice). Add NO opinion of your own, pick NO door, and reveal no private analysis. Keep it to 2–4 short sentences, markdown, projector-readable, and end with ONE question that helps the decision-maker weigh it and decide. Return ONLY that prose — no JSON, no preamble.`;
+
+// Forced-structured-output tool for the facilitator turn. Using tool-use means
+// the model fills a typed schema and Anthropic returns it already-parsed, so an
+// unescaped quote or newline in reply.text can never break JSON parsing.
+const TURN_TOOL = {
+  name: "facilitator_turn",
+  description: "Return the facilitator's structured response for this conversation turn.",
+  input_schema: {
+    type: "object",
+    properties: {
+      reply: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "the single facilitator voice for this turn, markdown" },
+          figures: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { label: { type: "string" }, value: { type: "string" } },
+              required: ["label", "value"],
+            },
+          },
+        },
+        required: ["text", "figures"],
+      },
+      note: { type: "string", description: "one short stage line, or empty string" },
+      state: {
+        type: "object",
+        properties: {
+          decided: { type: "array", items: { type: "string" } },
+          rejected: { type: "array", items: { type: "string" } },
+          open: { type: "array", items: { type: "string" } },
+          direction: { type: "string" },
+        },
+        required: ["decided", "rejected", "open", "direction"],
+      },
+      summon: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["none", "all", "named", "auto"] },
+          ids: { type: "array", items: { type: "string" } },
+        },
+        required: ["mode", "ids"],
+      },
+    },
+    required: ["reply", "note", "state", "summon"],
+  },
+};
 
 // Build a persona's system prompt. Personas get the case + fact-sheet (DATA) and
 // their own lens — but NEVER the instructor layer (that is the facilitator's alone).
@@ -306,6 +353,34 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
   }
   const data = await res.json();
   return data.content?.[0]?.text ?? "";
+}
+
+// Forced structured output via tool-use. Returns the tool input object already
+// parsed by Anthropic — no JSON.parse of free text, so malformed model JSON
+// (unescaped quotes/newlines) can never throw here.
+async function callAnthropicJSON(system: string, user: string, tool: any, maxTokens = 1600): Promise<any> {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+      tools: [tool],
+      tool_choice: { type: "tool", name: tool.name },
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Anthropic ${res.status}: ${t}`);
+  }
+  const data = await res.json();
+  const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
+  if (!block || !block.input) throw new Error("no tool_use block in response");
+  return block.input;
 }
 
 function extractJson(text: string): any {
@@ -381,9 +456,8 @@ Deno.serve(async (req) => {
         `${formatState(state)}\n\n` +
         `RECENT EXCHANGE:\n${recentTail(body.history)}\n\n` +
         `PARTICIPANT (this turn): ${message}\n\n` +
-        `Respond as the Socratic facilitator following the OUTPUT schema exactly. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
-      const text = await callAnthropic(FACILITATOR_SYSTEM, user, 1400);
-      const parsed = extractJson(text);
+        `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
+      const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600);
       const summon = parsed?.summon ?? { mode: "none", ids: [] };
       return json({
         reply: {
@@ -432,13 +506,9 @@ Deno.serve(async (req) => {
       const user =
         `${formatState(body.state)}\n\n` +
         `THE COUNCIL JUST SAID:\n${stmtText}\n\n` +
-        `Synthesize as the facilitator: name the REAL fault line between them (e.g. how fast to move vs what to sacrifice), in 2–4 short sentences, markdown. Do NOT add your own opinion, do NOT pick a door, do NOT reveal any private analysis. End with ONE question that helps the decision-maker weigh it and decide.`;
-      const text = await callAnthropic(FACILITATOR_SYSTEM, user, 700);
-      // synthesis is plain facilitator text; ignore any stray JSON the model adds
-      let out = text.trim();
-      const j = (() => { try { return extractJson(out); } catch { return null; } })();
-      if (j?.reply?.text) out = String(j.reply.text);
-      return json({ text: out });
+        `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
+      const text = await callAnthropic(SYNTH_SYSTEM, user, 700);
+      return json({ text: String(text ?? "").trim() });
     }
 
     return json({ error: "unknown action" }, 400);
