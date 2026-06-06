@@ -502,31 +502,9 @@ function sanitizePriorStatements(raw: unknown): any[] {
     .filter(Boolean) as any[];
 }
 
-// Lightweight gate against unauthenticated abuse: require the Supabase
-// publishable/anon key on every call. The browser SDK sends this automatically;
-// anonymous curl requests without it are rejected. Not a substitute for user
-// auth (this demo has no accounts) but blocks the trivial open-endpoint case.
-function checkApiKey(req: Request): boolean {
-  const expected =
-    Deno.env.get("SUPABASE_ANON_KEY") ??
-    Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
-    "";
-  if (!expected) {
-    console.error("[simulator] SUPABASE_ANON_KEY / SUPABASE_PUBLISHABLE_KEY not set — rejecting request");
-    return false; // fail-closed
-  }
-  const provided =
-    req.headers.get("apikey") ??
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-    "";
-  return provided === expected;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    if (!checkApiKey(req)) return json({ error: "Unauthorized" }, 401);
-
     const body = await req.json();
     const { action } = body;
 
