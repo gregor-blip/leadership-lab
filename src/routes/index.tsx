@@ -2,8 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { MENTORS, PARTICIPANT, type TranscriptEntry, type Figure } from "@/lib/simulator-data";
-import { getCase, sendTurn } from "@/lib/simulator-client";
+import {
+  MENTORS,
+  PARTICIPANT,
+  EMPTY_STATE,
+  type TranscriptEntry,
+  type Figure,
+  type ConvState,
+  type PersonaStatement,
+} from "@/lib/simulator-data";
+import { getCase, sendTurn, callPersona, synthesize } from "@/lib/simulator-client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -50,22 +58,34 @@ const PREVIEW_SEED: TranscriptEntry[] = [
     kind: "council",
     id: "disruptor",
     name: "The Disruptor",
-    school: "Disruptive innovation",
-    text: "Defending the premium is how forty-year-old institutions die comfortably. The modular online track is the only door that meets the threat where it actually lives. Move before someone else names your price for you.",
+    school: "Disruptive innovation & demand",
+    text: "Defending the premium is how forty-year-old institutions die comfortably. Door 3 is the only one that meets the threat where it actually lives. Move before someone else names your price for you.",
   },
   {
     kind: "council",
     id: "operator",
     name: "The Operator",
-    school: "Execution & operations",
-    text: "The Disruptor is hand-waving the hard part. Before anyone commits to Door 2:\n\n- **Faculty:** the modular track needs teaching time nobody has freed up.\n- **Platform:** there is no delivery system built yet.\n- **Timeline:** eighteen months, not next term, or it ships broken.\n\nShip it half-built and it damages the name it borrows.",
+    school: "Execution & capital reality",
+    text: "The Disruptor is hand-waving the hard part. On €130k of cash and 14 people:\n\n- **Faculty:** the AI track needs teaching time nobody has freed up.\n- **Cash:** there is no budget line to build it yet.\n- **Timeline:** eighteen months, not next term, or it ships broken.\n\nName the owner and the money first.",
+  },
+  {
+    kind: "council",
+    id: "champion",
+    name: "The Champion",
+    school: "Constructive advocacy",
+    text: "The case for door 3 is stronger than the room admits: the finished building, a 97%-backed recap, a board that just added a Harvard scholar and a tech founder. But say it plainly, what makes IEDC *the* school companies trust to implement AI, not one more claimant? Earn that and door 3 holds.",
   },
   {
     kind: "council",
     id: "ethicalChallenger",
     name: "The Ethical Challenger",
     school: "Stakeholder ethics",
-    text: "Both of you are deciding for alumni who paid full price for scarcity. Split the brand and you tell them quietly that the thing they bought is now sold cheaper next door. Whatever you choose, say it to their faces first.",
+    text: "You are all deciding for alumni who paid full price for scarcity. Whatever door you pick, who bears the cost that was not in the room, and would you say it to their faces first?",
+  },
+  {
+    kind: "facilitator",
+    text: "The real split: the **Operator** wants the mechanism nailed before the leap; the **Disruptor** says the market will not wait for it. Where do you land, move now and build under fire, or fund the capability first? What would have to be true to do both?",
+    figures: [],
   },
 ];
 
@@ -280,6 +300,7 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [caseOpen, setCaseOpen] = useState(!(seed && seed.length)); // open to read first; collapsed when pre-seeded
+  const [convState, setConvState] = useState<ConvState>(EMPTY_STATE); // distilled shared state, injected into personas
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -293,22 +314,71 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
     if (!text || thinking) return;
     const snapshot = transcript; // history = turns BEFORE this message
     if (snapshot.length === 0) setCaseOpen(false); // collapse the case once we start
-    setTranscript((t) => [...t, { kind: "participant", text }]);
+    const withParticipant: TranscriptEntry[] = [...snapshot, { kind: "participant", text }];
+    setTranscript(withParticipant);
     setInput("");
     setThinking(true);
     try {
-      const res = await sendTurn(text, snapshot);
-      const additions: TranscriptEntry[] = [];
+      const res = await sendTurn(text, snapshot, convState);
+      let running: TranscriptEntry[] = [...withParticipant];
       if (res.reply?.text)
-        additions.push({ kind: "facilitator", text: res.reply.text, figures: res.reply.figures ?? [] });
-      if (res.note) additions.push({ kind: "note", text: res.note });
-      for (const c of res.council ?? [])
-        additions.push({ kind: "council", id: c.id, name: c.name, school: c.school, text: c.message });
-      setTranscript((t) => [...t, ...additions]);
+        running = [...running, { kind: "facilitator", text: res.reply.text, figures: res.reply.figures ?? [] }];
+      if (res.note) running = [...running, { kind: "note", text: res.note }];
+      setTranscript(running);
+      const nextState = res.state ?? convState;
+      if (res.state) setConvState(res.state);
+      const ids = res.summon?.ids ?? [];
+      if (res.summon && res.summon.mode !== "none" && ids.length) {
+        await runCouncil(ids, text, running, nextState);
+      }
     } catch (e) {
       toast.error("The room went quiet", { description: String((e as any)?.message ?? e) });
     } finally {
       setThinking(false);
+    }
+  }
+
+  // Run the summoned mentors one at a time so each SEES the prior statements and
+  // genuinely responds. Cards render as each call lands (progressive, not a spinner
+  // wall). A full council (more than one) gets a closing facilitator synthesis.
+  async function runCouncil(
+    ids: string[],
+    participantMessage: string,
+    baseTranscript: TranscriptEntry[],
+    state: ConvState
+  ) {
+    const priors: PersonaStatement[] = [];
+    let running = baseTranscript;
+    for (const id of ids) {
+      try {
+        const stmt = await callPersona({
+          personaId: id,
+          message: participantMessage,
+          transcript: baseTranscript,
+          state,
+          priorStatements: priors,
+        });
+        if (!stmt?.id) continue;
+        priors.push(stmt);
+        running = [
+          ...running,
+          { kind: "council", id: stmt.id, name: stmt.name, school: stmt.school, text: stmt.message },
+        ];
+        setTranscript(running);
+      } catch (e) {
+        toast.error("A mentor didn't make it in", { description: String((e as any)?.message ?? e) });
+      }
+    }
+    if (priors.length > 1) {
+      try {
+        const syn = await synthesize({ transcript: baseTranscript, state, statements: priors });
+        if (syn?.text) {
+          running = [...running, { kind: "facilitator", text: syn.text, figures: [] }];
+          setTranscript(running);
+        }
+      } catch {
+        // synthesis is a nice-to-have; never fail the whole council on it
+      }
     }
   }
 

@@ -12,34 +12,36 @@ export type Participant = {
 export const PARTICIPANT: Participant = {
   name: "Marko Novaković",
   country: "Serbia",
-  flag: "🇷🇸",
+  flag: "RS",
   role: "Participant",
 };
 
-// ---- Mentors (names ARE their personalities). ids match the Edge Function. ----
+// ---- The council (names ARE their personalities). ids match the Edge Function
+// PERSONA_META. The Champion replaces the old Contrarian: four challenge from
+// distinct angles, one builds the strongest case FOR the participant's direction. ----
 export type Mentor = { id: string; name: string; school: string; blurb: string };
 
 export const MENTORS: Mentor[] = [
   {
     id: "disruptor",
     name: "The Disruptor",
-    school: "Disruptive innovation",
+    school: "Disruptive innovation & demand",
     blurb:
-      "Sees the cheaper, simpler threat coming from underneath — and doesn't care whether you think it applies to you.",
+      "Sees the cheaper, simpler threat coming from underneath, and asks what the market actually wants now.",
   },
   {
     id: "operator",
     name: "The Operator",
-    school: "Execution & operations",
+    school: "Execution & capital reality",
     blurb:
-      "Turns every idea into who-does-what-by-when. Allergic to vision without a mechanism.",
+      "Turns every idea into who-does-what-by-when, paid for how. Allergic to vision without a mechanism.",
   },
   {
-    id: "contrarian",
-    name: "The Contrarian",
-    school: "Behavioral economics & cognitive bias",
+    id: "champion",
+    name: "The Champion",
+    school: "Constructive advocacy",
     blurb:
-      "Hunts the bias hiding in your confidence, and asks what evidence would actually change your mind.",
+      "Builds the strongest case FOR your direction and makes you earn it. A steelman, not a yes-man.",
   },
   {
     id: "systemsThinker",
@@ -53,24 +55,39 @@ export const MENTORS: Mentor[] = [
     name: "The Ethical Challenger",
     school: "Stakeholder ethics",
     blurb:
-      "Asks who bears the cost that wasn't in the room — and whether the decision would survive the front page.",
+      "Asks who bears the cost that wasn't in the room, and whether the decision would survive the front page.",
   },
 ];
 
-// ---- Conversation payloads (mirror the Edge Function `turn` response) ----
+// ---- Conversation payloads (mirror the Edge Function) ----
 export type Figure = { label: string; value: string };
 
-// The single default voice (facilitator/analyst). figures present only when it
+// The single default voice (Socratic facilitator). figures present only when it
 // cites fact-sheet numbers.
 export type Reply = { text: string; figures: Figure[] };
 
-export type CouncilMessage = { id: string; name: string; school: string; message: string };
+// The Facilitator's distilled running state — injected into each persona so they
+// reason from where things actually stand, not the raw transcript.
+export type ConvState = {
+  decided: string[];
+  rejected: string[];
+  open: string[];
+  direction: string;
+};
 
-export type TurnResponse = { reply: Reply; council: CouncilMessage[]; note: string };
+export const EMPTY_STATE: ConvState = { decided: [], rejected: [], open: [], direction: "" };
 
-// How the council is summoned. Omitted = not summoned (single-voice turn).
-//   "auto" = bring 1-2 relevant mentors · "all" = full council · <mentorId> = just that one
-export type Summon = "auto" | "all" | string;
+// Who the facilitator decided to convene this turn.
+export type Summon = { mode: "none" | "all" | "named" | "auto"; ids: string[] };
+
+// `turn` response: single facilitator voice + updated state + summon decision.
+export type TurnResponse = { reply: Reply; note: string; state: ConvState; summon: Summon };
+
+// One persona's statement (the `persona` action).
+export type PersonaStatement = { id: string; name: string; school: string; message: string };
+
+// The facilitator synthesis after a full council (the `synthesize` action).
+export type SynthesizeResponse = { text: string };
 
 // ---- Transcript (flat, in-memory). `note` entries are display-only and are
 // NOT sent back to the model as history. ----
