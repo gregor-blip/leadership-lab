@@ -1,15 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
 
+/* ============================================================
+   IEDC Leadership Lab — editorial-gold design system.
+   Cool Swiss editorial in IEDC's own brand gold on warm cream.
+   Serif (Newsreader) / sans (Geist) / mono (JetBrains) is the voice.
+   Gold is a system of FILLS, WASHES, LINES, NUMERALS — never light
+   text on cream. Text stays ink. Built projector-legible.
+   ============================================================ */
+
 @theme inline {
+  /* sharp Swiss base; a few soft radii reserved for bezel exhibits */
   --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
+
+  /* shadcn surface tokens (keep — primitives depend on them) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -29,67 +39,192 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* editorial palette tokens → utilities (text-ink, bg-paper, border-gold-line…) */
   --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
   --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-edge: var(--paper-edge);
   --color-rule: var(--rule);
-  --color-electric: var(--electric);
-  --color-gold: var(--electric);
-  --font-display: "Inter Tight", "Helvetica Neue", system-ui, sans-serif;
+  --color-hair: var(--hair);
+  --color-gold: var(--gold);
+  --color-gold-line: var(--gold-line);
+  --color-gold-wash: var(--gold-wash);
+  --color-electric: var(--gold); /* back-compat alias */
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-display: var(--font-serif);
 }
 
 :root {
   --radius: 0;
 
-  /* IEDC-Bled palette: cream surface, warm charcoal-brown ink, golden-yellow accent */
-  --paper: oklch(0.974 0.013 83);     /* warm off-white / cream surface */
-  --ink: oklch(0.235 0.022 60);       /* warm charcoal-brown — the "human" colour */
-  --rule: oklch(0.87 0.014 72);       /* hairline, warm light brown-grey */
-  --electric: oklch(0.80 0.155 84);   /* IEDC golden yellow — ignites only at key moments */
+  /* IEDC-Bled palette: warm cream surface, charcoal-brown ink, brand gold #F3C547 */
+  --paper:      oklch(0.973 0.012 84);   /* warm cream surface */
+  --paper-2:    oklch(0.948 0.013 82);   /* soft inset panel */
+  --paper-edge: oklch(0.916 0.014 80);   /* deeper edge — bezel outer shell */
+  --ink:        oklch(0.225 0.020 58);   /* warm charcoal-brown, the "human" colour */
+  --ink-soft:   oklch(0.430 0.018 60);   /* secondary text */
+  --ink-mute:   oklch(0.585 0.014 64);   /* muted micro-labels */
+  --rule:       oklch(0.872 0.013 74);   /* hairline that reads */
+  --hair:       oklch(0.908 0.010 76);   /* fainter hairline */
+  --gold:       oklch(0.825 0.150 92);   /* IEDC brand gold #F3C547 — fills, washes, glow */
+  --gold-line:  oklch(0.705 0.130 80);   /* deeper gold for lines/arcs/numerals that must read */
+  --gold-wash:  oklch(0.962 0.044 96);   /* pale gold — exhibit & panel backgrounds */
+  --glow:       oklch(0.825 0.150 92 / 0.42);
 
+  /* shadcn mappings */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(0.992 0.006 85);      /* warm near-white inset */
+  --card: oklch(0.991 0.006 88);          /* near-white inner core */
   --card-foreground: var(--ink);
-  --popover: oklch(0.992 0.006 85);
+  --popover: oklch(0.991 0.006 88);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
-  --secondary: oklch(0.945 0.013 80); /* warm cream-grey */
+  --secondary: var(--paper-2);
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.945 0.013 80);
-  --muted-foreground: oklch(0.50 0.022 60); /* warm mid-brown */
-  --accent: var(--electric);
-  --accent-foreground: var(--ink);    /* charcoal-brown text on gold reads cleanly */
+  --muted: var(--paper-2);
+  --muted-foreground: var(--ink-mute);
+  --accent: var(--gold);
+  --accent-foreground: var(--ink);        /* ink on gold reads cleanly */
   --destructive: oklch(0.52 0.18 32);
   --destructive-foreground: oklch(0.99 0.005 85);
   --border: var(--rule);
   --input: var(--rule);
-  --ring: var(--ink);
+  --ring: var(--gold-line);
+
+  /* motion — strong custom curves (Emil / Awwwards), never linear/ease-in-out for UI */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html, body, #root { background: var(--paper); color: var(--ink); }
 body {
-  font-family: var(--font-display);
-  font-feature-settings: "ss01", "cv11";
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01", "cv11", "kern", "liga", "calt";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.numeral { font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
-.hairline { border-color: var(--rule); }
-.kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); opacity: 0.6; }
+/* subtle warm paper grain — fixed, never on a scroll container; kept faint for projector */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.022;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
-/* Serif-italic accent — echoes IEDC's "A School with a View" tagline voice. */
+/* ---------- type helpers ---------- */
+.display { font-family: var(--font-serif); font-weight: 400; font-variation-settings: "opsz" 64; letter-spacing: -0.018em; line-height: 0.98; }
 .serif { font-family: var(--font-serif); }
-.tagline { font-family: var(--font-serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.tagline { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-variation-settings: "opsz" 36; letter-spacing: -0.005em; }
+.numeral { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-/* Respect reduced-motion across the whole app. */
+/* mono micro-label — kickers, eyebrows, meta, nav */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.kicker-ink { color: var(--ink); }
+
+/* serif italic emphasis stays INK for legibility; gold rides underneath as a wash */
+.em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-variation-settings: "opsz" 64;
+  color: var(--ink);
+  background: linear-gradient(transparent 64%, var(--glow) 64%, var(--glow) 92%, transparent 92%);
+}
+
+/* giant editorial section numeral — decorative gold watermark */
+.section-num {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-variation-settings: "opsz" 72;
+  font-weight: 360;
+  color: var(--gold-line);
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+}
+
+/* hairline helper */
+.hairline { border-color: var(--rule); }
+
+/* ---------- the double-bezel exhibit panel (machined, nested) ---------- */
+.bezel { background: var(--paper-edge); border: 0.5px solid var(--rule); border-radius: var(--radius-2xl); padding: 7px;
+  box-shadow: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 30px 55px -34px oklch(0.3 0.04 60 / 0.45); }
+.bezel-core { background: var(--card); border: 0.5px solid oklch(0.3 0.02 60 / 0.06); border-radius: calc(var(--radius-2xl) - 7px); }
+/* gold exhibit variant — the Analyst / Peak 1 card */
+.bezel-gold { background: oklch(0.93 0.05 95); }
+.bezel-gold > .bezel-core { background: var(--gold-wash); border-color: oklch(0.7 0.13 85 / 0.22); }
+
+/* ---------- buttons ---------- */
+.btn { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+  transition: transform 160ms var(--ease-out), background-color 220ms var(--ease-out), color 220ms var(--ease-out), border-color 220ms var(--ease-out); }
+.btn:active { transform: scale(0.975); }
+.btn:disabled { opacity: 0.38; pointer-events: none; }
+
+/* primary gold pill with nested circular arrow (button-in-button) */
+.btn-primary { display: inline-flex; align-items: center; gap: 14px; background: var(--gold); color: var(--ink);
+  padding: 13px 16px 13px 24px; border-radius: 999px; }
+.btn-primary:hover { background: oklch(0.86 0.155 92); }
+.btn-primary .nub { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border-radius: 999px; background: var(--ink); color: var(--paper);
+  transition: transform 220ms var(--ease-out); }
+.btn-primary:hover .nub { transform: translate(2px, -1px); }
+
+/* ghost / secondary */
+.btn-ghost { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--rule); color: var(--ink);
+  padding: 11px 18px; border-radius: 999px; background: transparent; }
+.btn-ghost:hover { border-color: var(--gold-line); background: var(--gold-wash); }
+
+/* ---------- links / underline grow ---------- */
+.ulink { background-image: linear-gradient(var(--gold-line), var(--gold-line)); background-size: 0% 1.5px;
+  background-position: 0 100%; background-repeat: no-repeat; transition: background-size 260ms var(--ease-out); }
+.ulink:hover { background-size: 100% 1.5px; }
+
+/* ---------- reveal motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.reveal { animation: rise 720ms var(--ease-out) both; }
+.reveal-1 { animation-delay: 60ms; }
+.reveal-2 { animation-delay: 120ms; }
+.reveal-3 { animation-delay: 180ms; }
+.reveal-4 { animation-delay: 240ms; }
+.reveal-5 { animation-delay: 300ms; }
+
+/* pulsing "now" dot */
+@keyframes nowpulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+.now-dot { animation: nowpulse 2.4s var(--ease-soft) infinite; }
+
+/* focus ring for keyboard nav */
+:where(button, a, textarea, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--gold-line); outline-offset: 2px; border-radius: 1px;
+}
+
+/* custom scrollbar inside scrollable panels */
+.scroll-quiet { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.scroll-quiet::-webkit-scrollbar { width: 8px; }
+.scroll-quiet::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 999px; }
+
+/* ---------- reduced motion: per-property, keep comprehension fades, kill movement ---------- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+  .reveal, .reveal-1, .reveal-2, .reveal-3, .reveal-4, .reveal-5 { animation: none; opacity: 1; transform: none; }
+  .now-dot { animation: none; }
+  .btn:active { transform: none; }
+  .btn-primary:hover .nub { transform: none; }
+  * { scroll-behavior: auto !important; }
 }
