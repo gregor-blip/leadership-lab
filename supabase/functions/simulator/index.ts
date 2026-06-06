@@ -350,7 +350,8 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${t}`);
+    console.error(`Anthropic ${res.status}:`, t);
+    throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
   return data.content?.[0]?.text ?? "";
