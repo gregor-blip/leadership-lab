@@ -42,6 +42,7 @@ const PREVIEW_SEED: TranscriptEntry[] = [
       { label: "Margin vs FY22", value: "−4.1 pts" },
       { label: "Cost / participant", value: "€3,180" },
       { label: "Repeat-client share", value: "38%" },
+      { label: "Structural cost gap", value: "~€540k (cost base ~€2.28M vs revenue ~€1.74M)" },
     ],
   },
   { kind: "note", text: "You convene the full council on the three doors." },
@@ -498,14 +499,24 @@ function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
           <Markdown text={text} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-5 border-t border-gold-line/25 pt-5 sm:grid-cols-3">
-          {figures.map((f, i) => (
-            <div key={i}>
-              <div className="kicker text-[9.5px] leading-tight">{f.label}</div>
-              <div className="numeral mt-1.5 text-[clamp(24px,3vw,34px)] font-medium leading-none text-ink">
-                {f.value}
+          {figures.map((f, i) => {
+            const { head, caption } = splitFigure(f.value);
+            const size =
+              head.length > 14
+                ? "text-[clamp(16px,1.9vw,22px)]"
+                : head.length > 9
+                  ? "text-[clamp(20px,2.4vw,28px)]"
+                  : "text-[clamp(24px,3vw,34px)]";
+            return (
+              <div key={i} className="min-w-0">
+                <div className="kicker text-[9.5px] leading-tight">{f.label}</div>
+                <div className={`numeral mt-1.5 ${size} font-medium leading-[1.06] text-ink [text-wrap:balance]`}>
+                  {head}
+                </div>
+                {caption && <div className="mt-1 text-[11px] leading-snug text-ink-mute">{caption}</div>}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </article>
@@ -659,6 +670,16 @@ function CaseText({ text }: { text: string }) {
   });
   flushList("ol-end");
   return <div>{out}</div>;
+}
+
+// A figure's `value` should be a short headline number. If the model returns a
+// long value with an explanation in parentheses, split it so the big numeral
+// stays a number and the rest drops to a small caption below.
+function splitFigure(value: string): { head: string; caption?: string } {
+  const v = (value ?? "").trim();
+  const m = v.match(/^(.+?)\s*\(([^)]*)\)\s*$/);
+  if (m && m[1].trim()) return { head: m[1].trim(), caption: m[2].trim() };
+  return { head: v };
 }
 
 function renderInline(text: string): React.ReactNode {
