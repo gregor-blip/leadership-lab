@@ -279,16 +279,17 @@ function MentorCell({ mentor, index, last }: { mentor: (typeof MENTORS)[number];
   const accent = mentor.id === "ethicalChallenger";
   return (
     <div
-      className={`reveal reveal-${Math.min(index + 1, 5)} p-5 ${
+      className={`reveal reveal-${Math.min(index + 1, 5)} flex flex-col p-5 ${
         !last ? "border-b border-hair sm:border-b lg:border-b-0 lg:border-r" : ""
       } ${index % 2 === 0 ? "sm:border-r sm:border-hair" : ""}`}
     >
-      <div className="kicker text-[9.5px] leading-tight">{mentor.school}</div>
-      <div className="mt-2 flex items-center gap-2">
-        {accent && <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />}
-        <span className="serif text-[19px] tracking-tight text-ink">{mentor.name}</span>
+      {/* fixed-height label + name rows so all five align regardless of wrap */}
+      <div className="kicker min-h-[24px] text-[9.5px] leading-tight">{mentor.school}</div>
+      <div className="mt-2 flex min-h-[44px] items-start gap-2">
+        {accent && <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gold" aria-hidden />}
+        <span className="serif text-[18px] leading-[1.15] tracking-tight text-ink">{mentor.name}</span>
       </div>
-      <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-mute">{mentor.blurb}</p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-mute">{mentor.blurb}</p>
     </div>
   );
 }
