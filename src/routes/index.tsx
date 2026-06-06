@@ -505,7 +505,7 @@ function Thinking() {
 function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: number }) {
   if (entry.kind === "participant") {
     return (
-      <div className="reveal ml-auto max-w-[88%] border-l-2 border-gold pl-4">
+      <div className="reveal ml-auto w-fit max-w-[86%] rounded-[10px] border border-rule bg-paper-2 px-4 py-3">
         <div className="kicker mb-1.5">You · in the president&rsquo;s seat</div>
         <p className="text-[16px] leading-relaxed text-ink">{entry.text}</p>
       </div>
@@ -520,21 +520,16 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
   // council
   const accent = entry.id === "ethicalChallenger";
   return (
-    <article className={`reveal reveal-${Math.min((index % 5) + 1, 5)} bezel`}>
-      <div className="bezel-core p-5 md:p-6">
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="flex items-center gap-2">
-            {accent && <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />}
-            <span className="serif text-[20px] tracking-tight text-ink">{entry.name}</span>
-          </div>
-          <div className="kicker shrink-0 text-[9.5px]">{entry.school}</div>
+    <article className={`reveal reveal-${Math.min((index % 5) + 1, 5)} panel`}>
+      <div className="flex items-baseline justify-between gap-4">
+        <div className="flex items-center gap-2">
+          {accent && <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />}
+          <span className="serif text-[20px] tracking-tight text-ink">{entry.name}</span>
         </div>
-        <div
-          className="my-3 h-px w-9"
-          style={{ background: accent ? "var(--gold-line)" : "var(--rule)" }}
-        />
-        <Markdown text={entry.text} />
+        <div className="kicker shrink-0 text-[9.5px]">{entry.school}</div>
       </div>
+      <div className="my-3 h-px w-9" style={{ background: accent ? "var(--gold-line)" : "var(--rule)" }} />
+      <Markdown text={entry.text} />
     </article>
   );
 }
@@ -547,14 +542,12 @@ function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
 
   if (!data) {
     return (
-      <article className="reveal border-l-2 border-rule pl-4">
-        <div className="kicker mb-1.5 flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink/35" />
+      <article className="reveal max-w-[62ch]">
+        <div className="kicker mb-2 flex items-center gap-2">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold-line" />
           Facilitator
         </div>
-        <div className="mt-1.5">
-          <Markdown text={text} />
-        </div>
+        <Markdown text={text} />
       </article>
     );
   }

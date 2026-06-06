@@ -172,6 +172,12 @@ body::after {
 .bezel-gold { background: oklch(0.93 0.05 95); }
 .bezel-gold > .bezel-core { background: var(--gold-wash); border-color: oklch(0.7 0.13 85 / 0.22); }
 
+/* light editorial panel — the council voices. The double-bezel is reserved for
+   the Analyst data exhibit, so elevation reads as hierarchy, not card-soup. */
+.panel { background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+  padding: clamp(18px, 2.2vw, 26px); transition: border-color 220ms var(--ease-out); }
+@media (hover: hover) { .panel:hover { border-color: var(--gold-line); } }
+
 /* ---------- buttons ---------- */
 .btn { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
   transition: transform 160ms var(--ease-out), background-color 220ms var(--ease-out), color 220ms var(--ease-out), border-color 220ms var(--ease-out); }
