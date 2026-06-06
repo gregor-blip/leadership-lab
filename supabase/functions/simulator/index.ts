@@ -350,7 +350,8 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${t}`);
+    console.error(`Anthropic ${res.status}:`, t);
+    throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
   return data.content?.[0]?.text ?? "";
@@ -376,7 +377,8 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${t}`);
+    console.error(`Anthropic ${res.status}:`, t);
+    throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
   const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
@@ -435,9 +437,93 @@ function json(payload: any, status = 200) {
   });
 }
 
+// ============================================================
+//  INPUT VALIDATION CAPS — prevent prompt injection via oversize
+//  payloads and bound token cost on every billable call.
+// ============================================================
+const MAX_MESSAGE_LEN = 2000;
+const MAX_HISTORY_ENTRIES = 20;
+const MAX_HISTORY_TEXT_LEN = 2000;
+const MAX_STATE_FIELD_LEN = 200;
+const MAX_STATE_ARRAY_LEN = 8;
+const MAX_PRIOR_STATEMENTS = 8;
+const MAX_PRIOR_MSG_LEN = 2000;
+const ALLOWED_HISTORY_ROLES = new Set(["participant", "facilitator", "analyst", "council"]);
+
+function clampStr(v: unknown, max: number): string {
+  return String(v ?? "").slice(0, max);
+}
+
+function sanitizeHistory(raw: unknown): any[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(-MAX_HISTORY_ENTRIES)
+    .map((m: any) => {
+      const role = String(m?.role ?? "");
+      if (!ALLOWED_HISTORY_ROLES.has(role)) return null;
+      const text = clampStr(m?.text, MAX_HISTORY_TEXT_LEN).trim();
+      if (!text) return null;
+      const out: any = { role, text };
+      if (role === "council") out.name = clampStr(m?.name, 80);
+      return out;
+    })
+    .filter(Boolean) as any[];
+}
+
+function sanitizeState(s: any): any {
+  const arr = (a: any) =>
+    Array.isArray(a)
+      ? a.map((x: any) => clampStr(x, MAX_STATE_FIELD_LEN)).filter(Boolean).slice(0, MAX_STATE_ARRAY_LEN)
+      : [];
+  return {
+    decided: arr(s?.decided),
+    rejected: arr(s?.rejected),
+    open: arr(s?.open),
+    direction: clampStr(s?.direction, MAX_STATE_FIELD_LEN),
+  };
+}
+
+function sanitizePriorStatements(raw: unknown): any[] {
+  if (!Array.isArray(raw)) return [];
+  const validIds = new Set(PERSONA_META.map((m) => m.id));
+  return raw
+    .slice(0, MAX_PRIOR_STATEMENTS)
+    .map((p: any) => {
+      const id = String(p?.id ?? "");
+      if (!validIds.has(id)) return null;
+      const meta = PERSONA_META.find((m) => m.id === id)!;
+      return {
+        id,
+        name: meta.name,
+        school: meta.school,
+        message: clampStr(p?.message, MAX_PRIOR_MSG_LEN).trim(),
+      };
+    })
+    .filter(Boolean) as any[];
+}
+
+// Lightweight gate against unauthenticated abuse: require the Supabase
+// publishable/anon key on every call. The browser SDK sends this automatically;
+// anonymous curl requests without it are rejected. Not a substitute for user
+// auth (this demo has no accounts) but blocks the trivial open-endpoint case.
+function checkApiKey(req: Request): boolean {
+  const expected =
+    Deno.env.get("SUPABASE_ANON_KEY") ??
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ??
+    "";
+  if (!expected) return true; // fail-open only if env is misconfigured
+  const provided =
+    req.headers.get("apikey") ??
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+    "";
+  return provided === expected;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    if (!checkApiKey(req)) return json({ error: "Unauthorized" }, 401);
+
     const body = await req.json();
     const { action } = body;
 
@@ -446,16 +532,18 @@ Deno.serve(async (req) => {
       return json({ caseText: CASE_TEXT });
     }
 
+    const history = sanitizeHistory(body.history);
+    const state = sanitizeState(body.state);
+
     // The Socratic facilitator turn: single voice, data freely / judgment withheld.
     // Maintains the shared state and decides whether/who to convene.
     if (action === "turn") {
-      const message = String(body.message ?? "").trim();
+      const message = clampStr(body.message, MAX_MESSAGE_LEN).trim();
       if (!message) return json({ error: "empty message" }, 400);
-      const state = body.state;
 
       const user =
         `${formatState(state)}\n\n` +
-        `RECENT EXCHANGE:\n${recentTail(body.history)}\n\n` +
+        `RECENT EXCHANGE:\n${recentTail(history)}\n\n` +
         `PARTICIPANT (this turn): ${message}\n\n` +
         `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
       const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600);
@@ -480,15 +568,15 @@ Deno.serve(async (req) => {
     if (action === "persona") {
       const personaId = String(body.personaId ?? "");
       if (!PERSONA_META.some((m) => m.id === personaId)) return json({ error: "unknown persona" }, 400);
-      const message = String(body.message ?? "").trim();
-      const priors = Array.isArray(body.priorStatements) ? body.priorStatements : [];
+      const message = clampStr(body.message, MAX_MESSAGE_LEN).trim();
+      const priors = sanitizePriorStatements(body.priorStatements);
       const priorsText = priors.length
-        ? priors.map((p: any) => `${p?.name ?? "A mentor"}: ${String(p?.message ?? "").trim()}`).join("\n\n")
+        ? priors.map((p: any) => `${p.name}: ${p.message}`).join("\n\n")
         : "(you are the first to speak this round)";
 
       const user =
-        `${formatState(body.state)}\n\n` +
-        `RECENT EXCHANGE:\n${recentTail(body.history)}\n\n` +
+        `${formatState(state)}\n\n` +
+        `RECENT EXCHANGE:\n${recentTail(history)}\n\n` +
         `WHAT THE DECISION-MAKER IS WEIGHING (this turn): ${message || "(reacting to where things stand)"}\n\n` +
         `OTHER MENTORS WHO HAVE ALREADY SPOKEN THIS ROUND:\n${priorsText}\n\n` +
         `React now, in your own voice, to the decision-maker's thinking. If you disagree with a mentor above, say so and name them. Do not repeat their point. Tight: 2–4 short sentences or a few bullets, markdown.`;
@@ -500,12 +588,12 @@ Deno.serve(async (req) => {
     // surfaces the real fault line, ends with a question. Adds NO sixth opinion,
     // picks NO side, reveals NO instructor layer.
     if (action === "synthesize") {
-      const statements = Array.isArray(body.statements) ? body.statements : [];
+      const statements = sanitizePriorStatements(body.statements);
       const stmtText = statements.length
-        ? statements.map((p: any) => `${p?.name ?? "A mentor"}: ${String(p?.message ?? "").trim()}`).join("\n\n")
+        ? statements.map((p: any) => `${p.name}: ${p.message}`).join("\n\n")
         : "(no statements)";
       const user =
-        `${formatState(body.state)}\n\n` +
+        `${formatState(state)}\n\n` +
         `THE COUNCIL JUST SAID:\n${stmtText}\n\n` +
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
       const text = await callAnthropic(SYNTH_SYSTEM, user, 700);
@@ -514,6 +602,8 @@ Deno.serve(async (req) => {
 
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    return json({ error: String(e?.message ?? e) }, 500);
+    // Keep upstream detail server-side only; never echo Anthropic bodies to clients.
+    console.error("simulator error:", e);
+    return json({ error: "An error occurred. Please try again." }, 500);
   }
 });
