@@ -377,7 +377,8 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${t}`);
+    console.error(`Anthropic ${res.status}:`, t);
+    throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
   const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
