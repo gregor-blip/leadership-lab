@@ -12,6 +12,21 @@ import {
   type PersonaStatement,
 } from "@/lib/simulator-data";
 import { getCase, sendTurn, callPersona, synthesize } from "@/lib/simulator-client";
+import { Component, type ReactNode } from "react";
+
+// Per-message error boundary: a malformed model payload degrades to an inline
+// note instead of blanking the whole app (the root boundary would take the page).
+class ItemBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed)
+      return <p className="kicker px-1 text-ink-mute">A message could not be displayed.</p>;
+    return this.props.children;
+  }
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -426,7 +441,9 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
         <div className="mx-auto max-w-[820px] space-y-5 py-7">
           {transcript.length === 0 && !thinking && <EmptyState />}
           {transcript.map((e, i) => (
-            <TranscriptItem key={i} entry={e} index={i} />
+            <ItemBoundary key={i}>
+              <TranscriptItem entry={e} index={i} />
+            </ItemBoundary>
           ))}
           {thinking && <Thinking />}
           <div ref={endRef} />
@@ -538,7 +555,8 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
 // distinct gold "Analyst" exhibit with a figure strip (Peak 1); otherwise it
 // reads as a lighter "Facilitator" reply.
 function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
-  const data = figures.length > 0;
+  const figs = Array.isArray(figures) ? figures : [];
+  const data = figs.length > 0;
 
   if (!data) {
     return (
@@ -563,7 +581,7 @@ function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
           <Markdown text={text} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-5 border-t border-gold-line/25 pt-5 sm:grid-cols-3">
-          {figures.map((f, i) => {
+          {figs.map((f, i) => {
             const { head, caption } = splitFigure(f.value);
             const size =
               head.length > 14
@@ -573,7 +591,7 @@ function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
                   : "text-[clamp(24px,3vw,34px)]";
             return (
               <div key={i} className="min-w-0">
-                <div className="kicker text-[9.5px] leading-tight">{f.label}</div>
+                <div className="kicker text-[9.5px] leading-tight">{String(f.label ?? "")}</div>
                 <div className={`numeral mt-1.5 ${size} font-medium leading-[1.06] text-ink [text-wrap:balance]`}>
                   {head}
                 </div>
@@ -739,8 +757,8 @@ function CaseText({ text }: { text: string }) {
 // A figure's `value` should be a short headline number. If the model returns a
 // long value with an explanation in parentheses, split it so the big numeral
 // stays a number and the rest drops to a small caption below.
-function splitFigure(value: string): { head: string; caption?: string } {
-  const v = (value ?? "").trim();
+function splitFigure(value: unknown): { head: string; caption?: string } {
+  const v = String(value ?? "").trim();
   const m = v.match(/^(.+?)\s*\(([^)]*)\)\s*$/);
   if (m && m[1].trim()) return { head: m[1].trim(), caption: m[2].trim() };
   return { head: v };
@@ -780,7 +798,7 @@ function renderInline(text: string): React.ReactNode {
    Carried over from PR #5 (projector short-form output) and styled to the gold
    system so the model's markdown renders instead of showing raw asterisks. */
 function Markdown({ text }: { text: string }) {
-  const lines = (text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   const blocks: React.ReactNode[] = [];
   let para: string[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
