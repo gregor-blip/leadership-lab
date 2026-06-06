@@ -21,10 +21,68 @@ export const Route = createFileRoute("/")({
 
 type Phase = "onboarding" | "conversation";
 
+// Offline preview (?preview=1): seed a representative transcript so every card
+// type renders without the edge function. Dev/demo aid only; no backend call.
+const PREVIEW_CASE = `### The decision
+IEDC–Poslovna šola Bled is forty years old and admired. Demand for its flagship executive programmes is softening while cheaper, faster online formats pull from underneath.
+
+1. **Defend the premium.** Hold price and prestige, invest in the residential experience.
+2. **Meet the market.** Launch a lower-priced modular online track under the IEDC name.
+3. **Split the brand.** Spin a separate digital school so the flagship stays untouched.`;
+
+const PREVIEW_SEED: TranscriptEntry[] = [
+  { kind: "participant", text: "Before I decide anything, show me the three-year trend on executive-programme revenue and margin." },
+  {
+    kind: "facilitator",
+    text: "Here is the audited picture for the executive-education line, FY2022 to FY2024. Revenue is roughly flat while the contribution margin has slipped four points, almost entirely from rising delivery cost per participant.",
+    figures: [
+      { label: "Exec revenue FY24", value: "€6.41M" },
+      { label: "3-yr revenue CAGR", value: "+1.2%" },
+      { label: "Contribution margin", value: "47.2%" },
+      { label: "Margin vs FY22", value: "−4.1 pts" },
+      { label: "Cost / participant", value: "€3,180" },
+      { label: "Repeat-client share", value: "38%" },
+    ],
+  },
+  { kind: "note", text: "You convene the full council on the three doors." },
+  {
+    kind: "council",
+    id: "disruptor",
+    name: "The Disruptor",
+    school: "Disruptive innovation",
+    text: "Defending the premium is how forty-year-old institutions die comfortably. The modular online track is the only door that meets the threat where it actually lives. Move before someone else names your price for you.",
+  },
+  {
+    kind: "council",
+    id: "operator",
+    name: "The Operator",
+    school: "Execution & operations",
+    text: "The Disruptor is hand-waving the hard part. Before anyone commits to Door 2:\n\n- **Faculty:** the modular track needs teaching time nobody has freed up.\n- **Platform:** there is no delivery system built yet.\n- **Timeline:** eighteen months, not next term, or it ships broken.\n\nShip it half-built and it damages the name it borrows.",
+  },
+  {
+    kind: "council",
+    id: "ethicalChallenger",
+    name: "The Ethical Challenger",
+    school: "Stakeholder ethics",
+    text: "Both of you are deciding for alumni who paid full price for scarcity. Split the brand and you tell them quietly that the thing they bought is now sold cheaper next door. Whatever you choose, say it to their faces first.",
+  },
+];
+
 function App() {
   const [phase, setPhase] = useState<Phase>("onboarding");
   const [caseText, setCaseText] = useState<string>("");
   const [loadingCase, setLoadingCase] = useState(false);
+  const [seed, setSeed] = useState<TranscriptEntry[] | null>(null);
+
+  // Client-only: enter the conversation pre-seeded when ?preview=1.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("preview") === "1") {
+      setCaseText(PREVIEW_CASE);
+      setSeed(PREVIEW_SEED);
+      setPhase("conversation");
+    }
+  }, []);
 
   async function begin() {
     setLoadingCase(true);
@@ -40,77 +98,64 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="relative min-h-[100dvh] bg-paper">
       <Toaster position="top-right" />
-      <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
-        <AppChrome>
-          <Header />
+      <div className="relative z-[2] mx-auto max-w-[1200px] px-5 pb-16 pt-7 md:px-10 md:pt-10">
+        <Masthead inCase={phase === "conversation"} />
+        <main>
           {phase === "onboarding" ? (
             <OnboardingBrief loading={loadingCase} onBegin={begin} />
           ) : (
-            <Conversation caseText={caseText} />
+            <Conversation caseText={caseText} seed={seed} />
           )}
-        </AppChrome>
-        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="kicker">
-            A live case, in conversation — adversarial mentors grounded in distinct schools of thought, not real individuals.
+        </main>
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- masthead (replaces the toy browser frame) ---------- */
+
+function Masthead({ inCase }: { inCase: boolean }) {
+  return (
+    <header className="reveal flex items-center justify-between border-b border-rule pb-4">
+      <div className="flex items-baseline gap-3">
+        <span className="display text-[19px] leading-none text-ink">IEDC</span>
+        <span className="hidden h-3 w-px bg-rule sm:block" />
+        <span className="kicker hidden sm:inline">Leadership Lab</span>
+      </div>
+      <div className="flex items-center gap-3">
+        {inCase && (
+          <span className="kicker hidden items-center gap-2 md:inline-flex">
+            <span className="now-dot inline-block h-1.5 w-1.5 rounded-full bg-gold-line" />
+            Live session
           </span>
-          <span className="numeral text-muted-foreground">IEDC · Bled</span>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- chrome + header ---------- */
-
-function AppChrome({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="border hairline bg-card shadow-[0_40px_90px_-50px_rgba(60,40,10,0.35)]">
-      <div className="flex items-center justify-between border-b hairline px-4 py-2.5">
-        <div className="flex gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.88_0.01_80)]" />
-        </div>
-        <div className="kicker">iedc leadership lab — concept prototype</div>
-        <div className="w-12" />
-      </div>
-      <div className="p-5 md:p-9">{children}</div>
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <header className="flex flex-col gap-4 border-b hairline pb-6 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <div className="kicker">IEDC Leadership Lab</div>
-        <h1 className="mt-2 text-[36px] font-medium leading-[0.95] tracking-tight md:text-[44px]">
-          A live case, in conversation.
-        </h1>
-        <div className="tagline mt-3 text-lg text-ink/80">
-          Not a quiz — an intelligence you talk to, command, and argue with.
-        </div>
-      </div>
-      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+        )}
         <ParticipantBadge />
-        <span className="kicker border hairline px-2.5 py-1.5">Concept prototype</span>
       </div>
     </header>
   );
 }
 
-// The logged-in student this case is assigned to.
+// The logged-in student this case is assigned to. Monogram, not a flag emoji.
 function ParticipantBadge() {
+  const initials = PARTICIPANT.name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("");
   return (
-    <div className="flex items-center gap-2.5 border hairline px-3 py-1.5">
-      <span className="text-lg leading-none" aria-hidden>
-        {PARTICIPANT.flag}
+    <div className="flex items-center gap-2.5">
+      <span
+        aria-hidden
+        className="grid h-8 w-8 place-items-center rounded-full border border-rule bg-card text-[11px] font-medium tracking-tight text-ink"
+      >
+        {initials}
       </span>
-      <div className="leading-tight">
-        <div className="text-sm font-medium tracking-tight">{PARTICIPANT.name}</div>
-        <div className="kicker text-[9px]">Logged in · {PARTICIPANT.country}</div>
+      <div className="hidden leading-tight sm:block">
+        <div className="text-[13px] font-medium tracking-tight text-ink">{PARTICIPANT.name}</div>
+        <div className="kicker text-[9.5px]">Logged in · {PARTICIPANT.country}</div>
       </div>
     </div>
   );
@@ -120,58 +165,79 @@ function ParticipantBadge() {
 
 function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () => void }) {
   return (
-    <section className="pt-7">
-      <div className="kicker">The brief / 00</div>
-      <h2 className="tagline mt-2 max-w-2xl text-2xl leading-snug md:text-[28px]">
-        You sit in the president's seat at IEDC.
-      </h2>
-
-      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-3">
-        <BriefPoint n="01" title="A real situation">
-          This is as close to a real executive situation as it gets. You'll face a real decision with
-          incomplete information. Talk freely, in your own words — the AI understands you.
-        </BriefPoint>
-        <BriefPoint n="02" title="Ask for the data">
-          You don't have all the numbers — so ask for them. Any metric, any analysis: ask, and the AI
-          runs it. You no longer calculate; you command. The old skill was doing the math. The new skill
-          is knowing what to ask.
-        </BriefPoint>
-        <BriefPoint n="03" title="You are not alone">
-          You command a council of five mentors. Their names are their personalities. They will disagree —
-          with you and with each other. Ask them, push them deeper, tell one to stay quiet, or talk to just
-          one. This is life, not software.
-        </BriefPoint>
+    <section>
+      {/* hero */}
+      <div className="relative pb-12 pt-10 md:pt-16">
+        <div className="reveal reveal-1 kicker mb-6">A live, AI-powered case experience</div>
+        <h1 className="reveal reveal-2 display max-w-[14ch] text-[clamp(44px,7vw,104px)] text-ink">
+          A live case, <span className="em">in conversation.</span>
+        </h1>
+        <p className="reveal reveal-3 tagline mt-6 max-w-[34ch] text-[clamp(19px,2.4vw,30px)] leading-[1.32] text-ink-soft">
+          Not a quiz. An intelligence you talk to, command, and argue with.
+        </p>
+        <span className="section-num pointer-events-none absolute -top-2 right-0 hidden select-none text-[clamp(90px,11vw,170px)] opacity-40 lg:block">
+          00
+        </span>
       </div>
 
-      <div className="mt-9 border-t hairline pt-6">
-        <div className="kicker mb-4">Your council</div>
-        <div className="grid grid-cols-1 gap-0 border hairline sm:grid-cols-2 lg:grid-cols-5">
-          {MENTORS.map((m, i) => (
-            <div
-              key={m.id}
-              className={`p-4 ${i < MENTORS.length - 1 ? "border-b hairline lg:border-b-0 lg:border-r" : ""} ${
-                i % 2 === 0 ? "sm:border-r hairline" : ""
-              } lg:border-r`}
-            >
-              <div className="kicker text-[9.5px]">{m.school}</div>
-              <div className="mt-1.5 text-lg tracking-tight">
-                {m.id === "ethicalChallenger" && <span className="mr-1.5 text-electric">●</span>}
-                {m.name}
-              </div>
-              <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{m.blurb}</p>
-            </div>
-          ))}
+      <div className="border-t border-rule" />
+
+      {/* the brief */}
+      <div className="grid grid-cols-1 gap-x-12 gap-y-10 pt-12 md:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <div className="kicker mb-4">
+            <span className="text-gold-line">01</span> &nbsp;/&nbsp; The brief
+          </div>
+          <h2 className="display text-[clamp(30px,3.6vw,52px)] text-ink">
+            You sit in the <span className="em">president&rsquo;s seat</span> at IEDC.
+          </h2>
+          <p className="mt-5 max-w-[42ch] text-[16px] leading-relaxed text-ink-soft">
+            One real decision, incomplete information, and a room that will not agree with you. There is no
+            score and no right answer. The conversation is the product.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-7 sm:grid-cols-3 md:gap-8">
+          <BriefPoint n="01" title="A real situation">
+            As close to a live executive moment as it gets. Talk freely, in your own words. The intelligence
+            understands you.
+          </BriefPoint>
+          <BriefPoint n="02" title="Ask for the data">
+            You don&rsquo;t hold every number, so ask for it. Any metric, any analysis. The old skill was
+            doing the math; the new one is knowing what to ask.
+          </BriefPoint>
+          <BriefPoint n="03" title="You are not alone">
+            You command a council of five. Their names are their personalities. They will disagree, with you
+            and with each other. This is life, not software.
+          </BriefPoint>
         </div>
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-        <span className="kicker">No score · no right answer · the conversation is the point</span>
-        <button
-          onClick={onBegin}
-          disabled={loading}
-          className="bg-electric px-7 py-3.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          {loading ? "Loading case…" : "Begin →"}
+      {/* council roster */}
+      <div className="mt-14">
+        <div className="mb-4 flex items-end justify-between">
+          <div className="kicker">
+            <span className="text-gold-line">02</span> &nbsp;/&nbsp; Your council
+          </div>
+          <div className="kicker hidden text-ink-mute sm:block">Summoned on demand, never automatic</div>
+        </div>
+        <div className="bezel">
+          <div className="bezel-core grid grid-cols-1 overflow-hidden sm:grid-cols-2 lg:grid-cols-5">
+            {MENTORS.map((m, i) => (
+              <MentorCell key={m.id} mentor={m} index={i} last={i === MENTORS.length - 1} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="mt-12 flex flex-col items-start gap-6 border-t border-rule pt-8 sm:flex-row sm:items-center sm:justify-between">
+        <span className="kicker max-w-[44ch]">No score · no right answer · the conversation is the point</span>
+        <button onClick={onBegin} disabled={loading} className="btn btn-primary">
+          {loading ? "Loading the case" : "Begin the case"}
+          <span className="nub" aria-hidden>
+            <ArrowIcon />
+          </span>
         </button>
       </div>
     </section>
@@ -181,20 +247,38 @@ function OnboardingBrief({ loading, onBegin }: { loading: boolean; onBegin: () =
 function BriefPoint({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="numeral text-3xl text-electric">{n}</div>
-      <h3 className="mt-2 text-lg font-medium tracking-tight">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</p>
+      <div className="section-num text-[clamp(40px,4vw,58px)] opacity-90">{n}</div>
+      <h3 className="mt-2 text-[17px] font-medium tracking-tight text-ink">{title}</h3>
+      <p className="mt-2.5 text-[13.5px] leading-relaxed text-ink-soft">{children}</p>
     </div>
   );
 }
 
-/* ---------- conversation: collapsible case bar on top + full-width chat ---------- */
+function MentorCell({ mentor, index, last }: { mentor: (typeof MENTORS)[number]; index: number; last: boolean }) {
+  const accent = mentor.id === "ethicalChallenger";
+  return (
+    <div
+      className={`reveal reveal-${Math.min(index + 1, 5)} p-5 ${
+        !last ? "border-b border-hair sm:border-b lg:border-b-0 lg:border-r" : ""
+      } ${index % 2 === 0 ? "sm:border-r sm:border-hair" : ""}`}
+    >
+      <div className="kicker text-[9.5px] leading-tight">{mentor.school}</div>
+      <div className="mt-2 flex items-center gap-2">
+        {accent && <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />}
+        <span className="serif text-[19px] tracking-tight text-ink">{mentor.name}</span>
+      </div>
+      <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-mute">{mentor.blurb}</p>
+    </div>
+  );
+}
 
-function Conversation({ caseText }: { caseText: string }) {
-  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+/* ---------- conversation ---------- */
+
+function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptEntry[] | null }) {
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>(seed ?? []);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
-  const [caseOpen, setCaseOpen] = useState(true); // open to read first; auto-collapses on first turn
+  const [caseOpen, setCaseOpen] = useState(!(seed && seed.length)); // open to read first; collapsed when pre-seeded
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -240,7 +324,7 @@ function Conversation({ caseText }: { caseText: string }) {
       ...t,
       {
         kind: "facilitator",
-        text: "Who would you like to hear from — one of them, a few, or the full council? Name them and I'll bring them in.",
+        text: "Who would you like to hear from, one of them, a few, or the full council? Name them and I'll bring them in.",
         figures: [],
       },
     ]);
@@ -254,18 +338,20 @@ function Conversation({ caseText }: { caseText: string }) {
   }
 
   return (
-    <div className="pt-6">
+    <div className="pt-8">
       {/* CASE — collapsible bar on top; expand any time to re-read it */}
       <CaseBar open={caseOpen} onToggle={() => setCaseOpen((o) => !o)} caseText={caseText} />
 
       {/* CONVERSATION — full width, owns the screen */}
-      <section className="mt-6">
-        <div className="flex items-center justify-between border-b hairline pb-3">
-          <div className="kicker">The conversation / 02</div>
-          <div className="kicker text-muted-foreground">Talk freely · ask · decide · convene</div>
+      <section className="mt-8">
+        <div className="flex items-end justify-between border-b border-rule pb-3">
+          <div className="kicker">
+            <span className="text-gold-line">03</span> &nbsp;/&nbsp; The conversation
+          </div>
+          <div className="kicker hidden text-ink-mute sm:block">Talk freely · ask · decide · convene</div>
         </div>
 
-        <div className="space-y-4 py-5">
+        <div className="mx-auto max-w-[820px] space-y-5 py-7">
           {transcript.length === 0 && !thinking && <EmptyState />}
           {transcript.map((e, i) => (
             <TranscriptItem key={i} entry={e} index={i} />
@@ -288,48 +374,44 @@ function Conversation({ caseText }: { caseText: string }) {
 }
 
 // The case as a collapsible bar at the top of the conversation.
-function CaseBar({
-  open,
-  onToggle,
-  caseText,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  caseText: string;
-}) {
+function CaseBar({ open, onToggle, caseText }: { open: boolean; onToggle: () => void; caseText: string }) {
   return (
-    <div className="border hairline">
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50"
-      >
-        <span className="kicker">The case · IEDC–Poslovna šola Bled</span>
-        <span className="kicker flex items-center gap-2 text-muted-foreground">
-          {open ? "Hide" : "Read the case"}
-          <span aria-hidden className="text-ink">{open ? "▲" : "▼"}</span>
-        </span>
-      </button>
-      {open && (
-        <div className="max-h-[58vh] overflow-y-auto border-t hairline px-5 py-6">
-          <div className="mx-auto max-w-3xl">
-            <CaseText text={caseText} />
+    <div className="bezel">
+      <div className="bezel-core overflow-hidden">
+        <button
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors duration-200 hover:bg-gold-wash/50"
+        >
+          <span className="kicker kicker-ink flex items-center gap-2.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold-line" />
+            The case · IEDC–Poslovna šola Bled
+          </span>
+          <span className="kicker flex items-center gap-2">
+            {open ? "Hide" : "Read the case"}
+            <Chevron open={open} />
+          </span>
+        </button>
+        {open && (
+          <div className="scroll-quiet max-h-[56vh] overflow-y-auto border-t border-hair px-6 py-7">
+            <div className="mx-auto max-w-[680px]">
+              <CaseText text={caseText} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="border hairline p-5">
-      <p className="tagline text-lg">The floor is yours.</p>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Read the case above, then respond in your own words — you'll get one direct reply, like a
-        real conversation. Ask for any number or analysis (“show me the three-year financial trend”), or
-        state a direction. When you want pushback, <span className="text-ink">summon the council</span>{" "}
-        below — or just say so (“council, tear this apart”).
+    <div className="reveal py-6 text-center">
+      <p className="display text-[clamp(26px,3.4vw,40px)] text-ink">The floor is yours.</p>
+      <p className="mx-auto mt-3 max-w-[52ch] text-[15px] leading-relaxed text-ink-soft">
+        Read the case above, then respond in your own words. You&rsquo;ll get one direct reply, like a real
+        conversation. Ask for any number or analysis, or state a direction. When you want pushback,{" "}
+        <span className="text-ink">summon the council</span> below, or just say so.
       </p>
     </div>
   );
@@ -337,11 +419,13 @@ function EmptyState() {
 
 function Thinking() {
   return (
-    <div className="flex items-center gap-2 px-1 text-muted-foreground">
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50" />
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:150ms]" />
-      <span className="h-1.5 w-1.5 animate-pulse bg-ink/50 [animation-delay:300ms]" />
-      <span className="kicker ml-1">The room is thinking</span>
+    <div className="flex items-center gap-2.5 px-1 text-ink-mute">
+      <span className="flex gap-1">
+        <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.2s]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.4s]" />
+      </span>
+      <span className="kicker">The room is thinking</span>
     </div>
   );
 }
@@ -349,18 +433,14 @@ function Thinking() {
 function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: number }) {
   if (entry.kind === "participant") {
     return (
-      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300 border-l-2 border-ink bg-secondary/60 px-4 py-3">
-        <div className="kicker mb-1">You · in the president's seat</div>
-        <p className="text-[15px] leading-relaxed">{entry.text}</p>
+      <div className="reveal ml-auto max-w-[88%] border-l-2 border-gold pl-4">
+        <div className="kicker mb-1.5">You · in the president&rsquo;s seat</div>
+        <p className="text-[16px] leading-relaxed text-ink">{entry.text}</p>
       </div>
     );
   }
   if (entry.kind === "note") {
-    return (
-      <p className="tagline px-1 text-center text-sm text-muted-foreground animate-in fade-in duration-300">
-        {entry.text}
-      </p>
-    );
+    return <p className="reveal tagline px-2 py-1 text-center text-[15px] text-ink-mute">{entry.text}</p>;
   }
   if (entry.kind === "facilitator") {
     return <ReplyCard text={entry.text} figures={entry.figures} />;
@@ -368,51 +448,66 @@ function TranscriptItem({ entry, index }: { entry: TranscriptEntry; index: numbe
   // council
   const accent = entry.id === "ethicalChallenger";
   return (
-    <article
-      className="animate-in fade-in slide-in-from-bottom-2 border hairline p-4 md:p-5"
-      style={{ animationDuration: "450ms", animationDelay: `${(index % 5) * 70}ms`, animationFillMode: "both" }}
-    >
-      <div className="flex items-baseline justify-between">
-        <div className="text-lg tracking-tight">
-          {accent && <span className="mr-1.5 text-electric">●</span>}
-          {entry.name}
+    <article className={`reveal reveal-${Math.min((index % 5) + 1, 5)} bezel`}>
+      <div className="bezel-core p-5 md:p-6">
+        <div className="flex items-baseline justify-between gap-4">
+          <div className="flex items-center gap-2">
+            {accent && <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />}
+            <span className="serif text-[20px] tracking-tight text-ink">{entry.name}</span>
+          </div>
+          <div className="kicker shrink-0 text-[9.5px]">{entry.school}</div>
         </div>
-        <div className="kicker">{entry.school}</div>
+        <div
+          className="my-3 h-px w-9"
+          style={{ background: accent ? "var(--gold-line)" : "var(--rule)" }}
+        />
+        <Markdown text={entry.text} />
       </div>
-      <div className="my-2.5 h-0.5 w-7" style={{ background: accent ? "var(--electric)" : "var(--rule)" }} />
-      <Markdown text={entry.text} />
     </article>
   );
 }
 
 // The single default voice. When it cites fact-sheet numbers it becomes the
-// distinct gold "Analyst" card with a figure strip (Peak 1); otherwise it reads
-// as a lighter "Facilitator" reply.
+// distinct gold "Analyst" exhibit with a figure strip (Peak 1); otherwise it
+// reads as a lighter "Facilitator" reply.
 function ReplyCard({ text, figures }: { text: string; figures: Figure[] }) {
   const data = figures.length > 0;
+
+  if (!data) {
+    return (
+      <article className="reveal border-l-2 border-rule pl-4">
+        <div className="kicker mb-1.5 flex items-center gap-2">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink/35" />
+          Facilitator
+        </div>
+        <div className="mt-1.5">
+          <Markdown text={text} />
+        </div>
+      </article>
+    );
+  }
+
   return (
-    <article
-      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 p-4 md:p-5 ${
-        data ? "border-2 border-[var(--electric)] bg-[oklch(0.97_0.03_85)]" : "border-l-2 border-[var(--rule)] pl-4"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 ${data ? "bg-electric" : "bg-ink/40"}`} />
-        <span className="kicker">{data ? "Analyst · from the audited fact-sheet" : "Facilitator"}</span>
-      </div>
-      <div className="mt-3">
-        <Markdown text={text} />
-      </div>
-      {data && (
-        <div className="mt-4 grid grid-cols-2 gap-px border border-[var(--rule)] bg-[var(--rule)] sm:grid-cols-3">
+    <article className="reveal bezel bezel-gold">
+      <div className="bezel-core p-5 md:p-6">
+        <div className="kicker kicker-ink flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-gold" />
+          Analyst · from the audited fact-sheet
+        </div>
+        <div className="mt-3.5">
+          <Markdown text={text} />
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-5 border-t border-gold-line/25 pt-5 sm:grid-cols-3">
           {figures.map((f, i) => (
-            <div key={i} className="bg-card p-3">
-              <div className="kicker text-[9px]">{f.label}</div>
-              <div className="numeral mt-1 text-xl font-medium leading-none md:text-2xl">{f.value}</div>
+            <div key={i}>
+              <div className="kicker text-[9.5px] leading-tight">{f.label}</div>
+              <div className="numeral mt-1.5 text-[clamp(24px,3vw,34px)] font-medium leading-none text-ink">
+                {f.value}
+              </div>
             </div>
           ))}
         </div>
-      )}
+      </div>
     </article>
   );
 }
@@ -433,42 +528,91 @@ function Composer({
   thinking: boolean;
 }) {
   return (
-    <div className="sticky bottom-0 border-t hairline bg-card pt-4">
-      {/* One voice by default. This asks the facilitator who you want to hear from. */}
+    <div className="sticky bottom-0 z-[3] -mx-1 bg-paper/92 px-1 pb-2 pt-4 backdrop-blur-sm">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <button
-          onClick={onConvene}
-          disabled={thinking}
-          className="border hairline px-3.5 py-1.5 text-[11px] font-medium uppercase tracking-wider transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
-        >
-          ⚖ Convene the council
+        <button onClick={onConvene} disabled={thinking} className="btn btn-ghost text-[11px]">
+          <CouncilIcon />
+          Convene the council
         </button>
-        <span className="kicker">one voice by default · you choose who weighs in</span>
+        <span className="kicker hidden sm:inline">One voice by default · you choose who weighs in</span>
       </div>
 
-      <textarea
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={onKeyDown}
-        rows={2}
-        placeholder="Ask for a number, state a direction, or talk to the room…"
-        className="w-full resize-none border hairline bg-paper p-3.5 text-[15px] leading-relaxed outline-none focus:border-ink"
-      />
-      <div className="mt-2.5 flex items-center justify-between pb-1">
-        <span className="kicker">Enter to send · Shift+Enter for a new line</span>
-        <button
-          onClick={onSend}
-          disabled={thinking || !input.trim()}
-          className="bg-electric px-6 py-2.5 text-sm font-semibold uppercase tracking-wider text-ink transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          {thinking ? "…" : "Send →"}
-        </button>
+      <div className="bezel">
+        <div className="bezel-core">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={2}
+            placeholder="Ask for a number, state a direction, or talk to the room…"
+            className="w-full resize-none bg-transparent px-4 pb-2 pt-3.5 text-[16px] leading-relaxed text-ink outline-none placeholder:text-ink-mute"
+          />
+          <div className="flex items-center justify-between px-4 pb-3">
+            <span className="kicker text-[9.5px]">Enter to send · Shift+Enter for a new line</span>
+            <button onClick={onSend} disabled={thinking || !input.trim()} className="btn btn-primary !py-2 !pl-5 !pr-2">
+              {thinking ? "Sending" : "Send"}
+              <span className="nub !h-7 !w-7" aria-hidden>
+                <ArrowIcon />
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* Lightweight markdown renderer for the case text (headings, lists, bold, rules). */
+function Footer() {
+  return (
+    <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-5">
+      <span className="kicker max-w-[60ch] leading-relaxed">
+        A live case, in conversation. Adversarial mentors grounded in distinct schools of thought, not real
+        individuals.
+      </span>
+      <span className="kicker text-ink-mute">IEDC · Bled</span>
+    </footer>
+  );
+}
+
+/* ---------- inline icons (ultra-light, emoji-free) ---------- */
+
+function ArrowIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path d="M3 11L11 3M11 3H5M11 3V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden
+      className="text-ink transition-transform duration-300"
+      style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+    >
+      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CouncilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <circle cx="3.2" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+      <circle cx="10.8" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+      <circle cx="7" cy="10" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M4.4 5.2L6 8.6M9.6 5.2L8 8.6M4.7 4H9.3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* ---------- lightweight markdown renderer for the case text ---------- */
+
 function CaseText({ text }: { text: string }) {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
@@ -477,11 +621,11 @@ function CaseText({ text }: { text: string }) {
   const flushList = (key: string) => {
     if (!list.length) return;
     out.push(
-      <ol key={key} className="mt-2 space-y-2.5">
+      <ol key={key} className="mt-3 space-y-3">
         {list.map((item, i) => (
-          <li key={i} className="flex gap-3 text-[16px] leading-relaxed md:text-[17px]">
-            <span className="numeral text-xl text-electric">{i + 1}</span>
-            <span>{renderInline(item.replace(/^\d+\.\s*/, ""))}</span>
+          <li key={i} className="flex gap-4 text-[16px] leading-relaxed text-ink md:text-[17px]">
+            <span className="section-num shrink-0 text-[22px] leading-none">{i + 1}</span>
+            <span className="serif">{renderInline(item.replace(/^\d+\.\s*/, ""))}</span>
           </li>
         ))}
       </ol>
@@ -499,15 +643,15 @@ function CaseText({ text }: { text: string }) {
     if (!line.trim()) return;
     if (line.startsWith("### ")) {
       out.push(
-        <h3 key={i} className="kicker mt-6 text-[11px] first:mt-0">
+        <h3 key={i} className="kicker mt-7 first:mt-0">
           {line.slice(4)}
         </h3>
       );
     } else if (line.startsWith("---")) {
-      out.push(<div key={i} className="my-5 h-px bg-[var(--rule)]" />);
+      out.push(<div key={i} className="my-6 h-px bg-rule" />);
     } else {
       out.push(
-        <p key={i} className="mt-3 text-[16px] leading-relaxed md:text-[17px]">
+        <p key={i} className="serif mt-3.5 text-[16px] leading-relaxed text-ink md:text-[17.5px]">
           {renderInline(line)}
         </p>
       );
@@ -530,14 +674,14 @@ function renderInline(text: string): React.ReactNode {
     }
     if (tok.startsWith("`") && tok.endsWith("`")) {
       return (
-        <code key={i} className="bg-secondary px-1 py-0.5 text-[0.92em]">
+        <code key={i} className="numeral bg-paper-2 px-1 py-0.5 text-[0.9em]">
           {tok.slice(1, -1)}
         </code>
       );
     }
     if ((tok.startsWith("*") && tok.endsWith("*")) || (tok.startsWith("_") && tok.endsWith("_"))) {
       return (
-        <em key={i} className="italic">
+        <em key={i} className="serif italic">
           {tok.slice(1, -1)}
         </em>
       );
@@ -546,15 +690,17 @@ function renderInline(text: string): React.ReactNode {
   });
 }
 
-/* Lightweight markdown for AI message bodies: paragraphs, bullet + numbered
-   lists, headings (rendered as bold), and inline bold/italic/code. No deps. */
+/* Lightweight markdown for AI message bodies (Facilitator / Analyst / council):
+   paragraphs, bullet + numbered lists, headings as bold, inline bold/italic/code.
+   Carried over from PR #5 (projector short-form output) and styled to the gold
+   system so the model's markdown renders instead of showing raw asterisks. */
 function Markdown({ text }: { text: string }) {
   const lines = (text ?? "").replace(/\r\n/g, "\n").split("\n");
   const blocks: React.ReactNode[] = [];
   let para: string[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
 
-  const body = "text-[16px] leading-relaxed md:text-[17px]";
+  const body = "text-[16px] leading-relaxed text-ink md:text-[17px]";
 
   const flushPara = (k: string) => {
     if (!para.length) return;
@@ -569,14 +715,14 @@ function Markdown({ text }: { text: string }) {
     if (!list) return;
     const L = list;
     blocks.push(
-      <ul key={k} className="mt-2 space-y-1.5 [&:not(:first-child)]:mt-2.5">
+      <ul key={k} className="mt-2.5 space-y-2 [&:not(:first-child)]:mt-3">
         {L.items.map((it, i) => (
-          <li key={i} className={`flex gap-2.5 ${body}`}>
-            <span className="shrink-0 text-muted-foreground">
+          <li key={i} className={`flex gap-3 ${body}`}>
+            <span className="shrink-0 select-none text-gold-line">
               {L.ordered ? (
-                <span className="numeral">{i + 1}.</span>
+                <span className="numeral text-[0.92em]">{i + 1}</span>
               ) : (
-                <span className="inline-block translate-y-[0.05em] text-electric">▪</span>
+                <span className="inline-block translate-y-[0.14em] text-[0.65em]">●</span>
               )}
             </span>
             <span>{renderInline(it)}</span>
