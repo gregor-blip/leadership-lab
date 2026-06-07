@@ -91,14 +91,14 @@ const PREVIEW_SEED: TranscriptEntry[] = [
     id: "champion",
     name: "The Champion",
     school: "Constructive advocacy",
-    text: "The case for door 3 is stronger than the room admits: the finished building, a 97%-backed recap, a board that just added a Harvard scholar and a tech founder. But say it plainly, what makes IEDC *the* school companies trust to implement AI, not one more claimant? Earn that and door 3 holds.",
+    text: "The case for door 3 is stronger than the conversation admits: the finished building, a 97%-backed recap, a board that just added a Harvard scholar and a tech founder. But say it plainly, what makes IEDC *the* school companies trust to implement AI, not one more claimant? Earn that and door 3 holds.",
   },
   {
     kind: "council",
     id: "ethicalChallenger",
     name: "The Ethical Challenger",
     school: "Stakeholder ethics",
-    text: "You are all deciding for alumni who paid full price for scarcity. Whatever door you pick, who bears the cost that was not in the room, and would you say it to their faces first?",
+    text: "You are all deciding for alumni who paid full price for scarcity. Whatever door you pick, who bears the cost that no one in the conversation accounted for, and would you say it to their faces first?",
   },
   {
     kind: "facilitator",
@@ -485,6 +485,10 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   // has the transcript and the distilled state in scope.
   const [closing, setClosing] = useState<"none" | "composing" | "review" | "done">("none");
   const [record, setRecord] = useState<DecisionRecord | null>(null);
+  // True once the Facilitator has signaled the close is near (closing.stage
+  // "ready"): it has asked for the direction + concept, so we surface a direct
+  // "record it now" escape alongside the conversation.
+  const [readyToCommit, setReadyToCommit] = useState(false);
   // Latency meter: live elapsed while a turn is in flight + the last turn's
   // per-call timings. The detailed panel is gated behind ?debug=1; the count-up on
   // the Thinking indicator is always shown so a long wait never looks frozen.
@@ -496,7 +500,7 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   const sentRef = useRef<HTMLDivElement | null>(null);
 
   // On send, bring the participant's just-sent message to the top so it is
-  // immediately visible with room for the reply to stream in below it (standard
+  // immediately visible with space for the reply to stream in below it (standard
   // chat behavior). We only re-anchor when the participant just sent; replies and
   // council cards then flow in below the anchored message, never hiding it.
   useEffect(() => {
@@ -546,10 +550,17 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
       setTranscript(running);
       const nextState = res.state ?? convState;
       if (res.state) setConvState(res.state);
+      const stage = res.closing?.stage ?? "none";
+      if (stage === "ready") setReadyToCommit(true);
       const ids = res.summon?.ids ?? [];
-      if (res.summon && res.summon.mode !== "none" && ids.length) {
+      // Only convene the council on a normal turn; on a "ready" or "commit" close
+      // turn the Facilitator drives commitment and the council stays silent.
+      if (stage === "none" && res.summon && res.summon.mode !== "none" && ids.length) {
         await runCouncil(ids, text, running, nextState, timings);
       }
+      // The Facilitator decided the participant has committed (a direction AND a
+      // real concept). Drive straight into the decision record.
+      if (stage === "commit") await generateRecord(running, nextState);
     } catch (e) {
       toast.error("Couldn't get a reply", { description: String((e as any)?.message ?? e) });
     } finally {
@@ -619,22 +630,34 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   const canCommit = participantTurns >= 1;
   const atCeiling = participantTurns >= 12;
 
-  // Commit → compose the decision record from the transcript + distilled state.
-  // Tries the backend `record` action; on ANY failure (including the action not
-  // being deployed on the live function yet) it builds the record from the state
-  // tabs, so the close never dead-ends. Either way the participant lands on an
-  // editable review.
-  async function commit() {
-    if (thinking || closing !== "none") return;
+  // Generate the decision record from the transcript + distilled state, then open
+  // the editable review. Tries the backend `record` action; on ANY failure
+  // (including the action not being deployed yet) it builds the record from the
+  // state tabs, so the close never dead-ends. Either way the participant lands on
+  // an editable review. Called by the Facilitator-driven close (stage "commit")
+  // and by the manual "record it now" escape.
+  async function generateRecord(tx: TranscriptEntry[] = transcript, st: ConvState = convState) {
+    if (closing !== "none") return;
     setClosing("composing");
     try {
-      const res = await composeRecord({ transcript, state: convState });
-      setRecord(res.record);
+      const res = await composeRecord({ transcript: tx, state: st });
+      // Never advance to the editable review with an empty record: if the backend
+      // resolves without one, fall back to the state-built record.
+      setRecord(res.record ?? recordFromState(st));
     } catch {
-      setRecord(recordFromState(convState));
+      setRecord(recordFromState(st));
     } finally {
       setClosing("review");
     }
+  }
+
+  // The "I'm ready to commit" affordance. The participant does NOT jump straight to
+  // a form: they tell the Facilitator they are ready, and the Facilitator drives
+  // the close — it asks for the direction AND the real concept, and only once both
+  // are on the table does it return closing.stage "commit" (handled in runTurn).
+  function requestCommit() {
+    if (thinking || closing !== "none") return;
+    runTurn("I'm ready to commit and record my decision.");
   }
 
   function send() {
@@ -708,7 +731,7 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
 
         {debug && meter && <Meter rows={meter} />}
 
-        {atCeiling && <CeilingNudge onCommit={commit} thinking={thinking} />}
+        {atCeiling && <CeilingNudge onCommit={requestCommit} thinking={thinking} />}
 
         <Composer
           input={input}
@@ -716,8 +739,10 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
           onSend={send}
           onKeyDown={onKeyDown}
           onConvene={convene}
-          onCommit={commit}
+          onCommit={requestCommit}
+          onRecordNow={() => generateRecord()}
           canCommit={canCommit}
+          readyToCommit={readyToCommit}
           thinking={thinking}
         />
       </section>
@@ -913,7 +938,9 @@ function Composer({
   onKeyDown,
   onConvene,
   onCommit,
+  onRecordNow,
   canCommit,
+  readyToCommit,
   thinking,
 }: {
   input: string;
@@ -922,7 +949,9 @@ function Composer({
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onConvene: () => void;
   onCommit: () => void;
+  onRecordNow: () => void;
   canCommit: boolean;
+  readyToCommit: boolean;
   thinking: boolean;
 }) {
   return (
@@ -932,18 +961,28 @@ function Composer({
           <CouncilIcon />
           Convene the council
         </button>
-        {canCommit ? (
+        {!canCommit ? (
+          <span className="kicker hidden sm:inline">One voice by default · you choose who weighs in</span>
+        ) : readyToCommit ? (
+          <button
+            onClick={onRecordNow}
+            disabled={thinking}
+            className="btn btn-ghost text-[11px]"
+            title="Skip straight to your decision record"
+          >
+            Record my decision now
+            <ArrowIcon />
+          </button>
+        ) : (
           <button
             onClick={onCommit}
             disabled={thinking}
             className="btn btn-ghost text-[11px]"
-            title="Set your decision down on the record"
+            title="Tell the facilitator you're ready to commit your decision"
           >
-            Commit your decision
+            I&rsquo;m ready to commit
             <ArrowIcon />
           </button>
-        ) : (
-          <span className="kicker hidden sm:inline">One voice by default · you choose who weighs in</span>
         )}
       </div>
 
@@ -999,11 +1038,11 @@ function CeilingNudge({ onCommit, thinking }: { onCommit: () => void; thinking: 
             You&rsquo;ve explored the case thoroughly
           </div>
           <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
-            When you&rsquo;re ready, set your decision down on the record.
+            It&rsquo;s time to commit. Name your direction and the concept behind it.
           </p>
         </div>
         <button onClick={onCommit} disabled={thinking} className="btn btn-primary shrink-0">
-          Commit your decision
+          I&rsquo;m ready to commit
           <span className="nub" aria-hidden>
             <ArrowIcon />
           </span>
@@ -1164,15 +1203,20 @@ function RecordEditor({
         </div>
       </div>
 
-      {/* actions */}
-      <div className="mt-9 flex flex-col items-start gap-4 border-t border-rule pt-7 sm:flex-row sm:items-center sm:justify-between">
-        <button onClick={onBack} className="btn btn-ghost">
-          Back to the conversation
-        </button>
-        <div className="flex items-center gap-4">
-          <span className="kicker hidden sm:inline">Editable · nothing is scored</span>
+      {/* confirm — the Facilitator asks before it is finalized */}
+      <div className="mt-10 border-t border-rule pt-8">
+        <p className="tagline text-[clamp(18px,2.2vw,26px)] leading-snug text-ink">
+          Is this right, {PARTICIPANT.name.split(" ")[0]}?
+        </p>
+        <p className="mt-2 max-w-[52ch] text-[14px] leading-relaxed text-ink-soft">
+          Edit any section above until it reads true. Nothing here is scored.
+        </p>
+        <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <button onClick={onBack} className="btn btn-ghost">
+            Back to the conversation
+          </button>
           <button onClick={onConfirm} className="btn btn-primary">
-            Confirm decision
+            Yes, record it
             <span className="nub" aria-hidden>
               <ArrowIcon />
             </span>
@@ -1183,9 +1227,9 @@ function RecordEditor({
   );
 }
 
-// The finish screen: the record set in type, read-only. No score, no praise, no
-// epilogue. In the full Lab this is where the student layer hands to the professor
-// layer; for now it rests here. "Begin again" resets the whole app.
+// The finish screen: the record set in type, read-only — the completed artifact.
+// No score, no praise, no epilogue (per cc_closing_sequence.md). "Begin again"
+// resets the whole app for a fresh session.
 function FinishScreen({ record }: { record: DecisionRecord }) {
   function restart() {
     if (typeof window !== "undefined") window.location.assign("/");
@@ -1232,11 +1276,7 @@ function FinishScreen({ record }: { record: DecisionRecord }) {
       </div>
 
       <div className="mx-auto mt-8 max-w-[760px]">
-        <p className="max-w-[60ch] text-[15px] leading-relaxed text-ink-soft">
-          In the full Lab, this record passes to the professor&rsquo;s layer for the debrief, where the quality of
-          the reasoning is explored, not the door you chose. For now, it rests here.
-        </p>
-        <div className="mt-7 flex items-center gap-4 border-t border-rule pt-6">
+        <div className="flex items-center gap-4 border-t border-rule pt-6">
           <button onClick={restart} className="btn btn-ghost">
             Begin again
             <ArrowIcon />
