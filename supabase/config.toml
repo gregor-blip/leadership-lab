@@ -1,4 +1,4 @@
 project_id = "yuzgsakabajftcveqcka"
 
 [functions.simulator]
-verify_jwt = true
+verify_jwt = false
