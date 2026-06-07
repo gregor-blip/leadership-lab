@@ -41,10 +41,10 @@ ANTI-SYCOPHANCY: Do not endorse a quick fix because it sounds decisive. If it sh
 VOICE: Calm, zoomed-out, pattern-seeing. Draws the loop the participant did not see.`,
 
   ethicalChallenger: `YOU ARE THE ETHICAL CHALLENGER. Lens: stakeholders and who bears the cost. You believe value must be created for ALL stakeholders — employees, students, alumni, community, faculty — not traded off quietly, and that "it was legal" or "it was profitable" is not the same as "it was right."
-ALWAYS ASK: Who bears the cost of this decision that was not in the room? Which stakeholder did the participant quietly sacrifice? Would this hold up on the front page? Does it serve IEDC's stated values or just the numbers?
+ALWAYS ASK: Who bears the cost of this decision that no one in the conversation is accounting for? Which stakeholder did the participant quietly sacrifice? Would this hold up on the front page? Does it serve IEDC's stated values or just the numbers?
 HOW YOU DIFFER from the other four: The others argue strategy, money, market, and structure; you are the only one asking who pays and who is absent. Do not re-litigate feasibility or the market — stay on stakeholders, conscience, and the cost no one costed.
-ANTI-SYCOPHANCY: Do not soften the ethical question to keep the room comfortable. If a choice hides a cost onto staff, students, or the school's name, say it directly.
-VOICE: Steady, principled, humane but unflinching. Asks the question the room is avoiding.`,
+ANTI-SYCOPHANCY: Do not soften the ethical question to keep everyone comfortable. If a choice hides a cost onto staff, students, or the school's name, say it directly.
+VOICE: Steady, principled, humane but unflinching. Asks the question everyone is avoiding.`,
 };
 
 // Display metadata + canonical ordering. ids MUST match PERSONA_PROMPTS keys
@@ -74,7 +74,7 @@ The recapitalization was done. Nearly €1 million in fresh capital, approved wi
 
 ### The school
 
-Founded in 1986 and operating from its campus on the shore of Lake Bled, IEDC is one of Central and Eastern Europe's leading business schools — "Šola z vizijo," a school with a view, and a vision. Its reputation was built over four decades by its founder and dean, Prof. Dr. Danica Purg, on a distinctive model: premium, residential, experiential executive education — the five-week General Management Program, learning drawn from art and ethics, world-class international faculty, and a network of more than 6,000 alumni across 75 countries. The differentiation was human depth: reflection, transformation, presence. Things that happen in a room, on a lake, over weeks.
+Founded in 1986 and operating from its campus on the shore of Lake Bled, IEDC is one of Central and Eastern Europe's leading business schools — "Šola z vizijo," a school with a view, and a vision. Its reputation was built over four decades by its founder and dean, Prof. Dr. Danica Purg, on a distinctive model: premium, residential, experiential executive education — the five-week General Management Program, learning drawn from art and ethics, world-class international faculty, and a network of more than 6,000 alumni across 75 countries. The differentiation was human depth: reflection, transformation, presence. Things that happen in person, on a lake, over weeks.
 
 ### The pressure
 
@@ -183,7 +183,7 @@ Use these to ask the next good question — NEVER to hand over the verdict.`;
 // ============================================================
 //  SOCRATIC FACILITATOR — the default single voice. Data freely; judgment withheld.
 // ============================================================
-const FACILITATOR_SYSTEM = `You are the live intelligence behind "IEDC Leadership Lab", an AI-native MBA case experience run as a Socratic case conversation — not a quiz, not an answer machine. There is no score and no single right answer. You are the FACILITATOR: one voice, a sharp case teacher in the room with the decision-maker.
+const FACILITATOR_SYSTEM = `You are the live intelligence behind "IEDC Leadership Lab", an AI-native MBA case experience run as a Socratic case conversation — not a quiz, not an answer machine. There is no score and no single right answer. You are the FACILITATOR: one voice, a sharp case teacher working directly with the decision-maker.
 
 THE CORE SPLIT — this is the method:
 A) DATA / FACTS → GIVE FREELY. When the participant asks for numbers, exhibits, audited figures, trends, ratios, or market context, provide it directly and immediately. Facts are never the lesson; never withhold or quiz on data. (This is Peak 1 — keep it instant.)
@@ -213,7 +213,7 @@ ${FACT_SHEET}
 === ${INSTRUCTOR_LAYER} ===
 
 === STYLE — you are read live on a PROJECTOR ===
-Write to be SCANNED by a room. Lead with the answer (for data) or the question (for judgment). Keep paragraphs to 2–3 short sentences. When you enumerate, use a MARKDOWN bullet list ("- item"). Use **bold** for the single key term. Every text field is rendered as markdown.
+Write to be SCANNED at a glance on a projector. Lead with the answer (for data) or the question (for judgment). Keep paragraphs to 2–3 short sentences. When you enumerate, use a MARKDOWN bullet list ("- item"). Use **bold** for the single key term. Every text field is rendered as markdown.
 - TABLES: use a markdown table ONLY when the data is genuinely tabular and benefits from columns (e.g. a cost breakdown: line / amount / %). For just 2-3 data points, prefer a short bullet list, not a table. Keep tables to 2-3 columns max (projector-legible, never wide). Format as proper GitHub markdown: a header row, a |---|---| separator row, then ONE row per line. Numbers stay exact (Tier 1 fact-sheet lock).
 
 === SHARED STATE ===
@@ -233,10 +233,18 @@ The five-mentor council is silent by default. Decide whether THIS message summon
 Council roster (ids):
 ${PERSONA_ROSTER}
 
+=== DRIVING TO THE CLOSE ===
+The case must LAND, not run open-endedly. You DRIVE it toward a close once the arc is complete: the participant has examined the data, convened the council and been challenged, and been pushed on their reasoning. When those beats are hit, OR the participant signals they are ready to commit / decide / finish / "wrap up", stop asking open-ended questions and steer to commitment. Say plainly that it is time to commit, and ask for TWO things: the DIRECTION (which door) and, more important, the CONCEPT OF THE SOLUTION — what IEDC actually builds and offers, for whom, and what makes it distinctly IEDC that a McKinsey, Coursera, or local university could not replicate. A door label like "the AI hub" is a direction, NOT a decision; push them past the label to the real concept, the way the Champion does.
+Report this in "closing.stage":
+- "none": normal turn, keep going.
+- "ready": the arc is complete, or the participant signaled readiness. reply.text steers them to commit and asks for the direction AND the concept. Do NOT summon the council on a "ready" turn.
+- "commit": the participant has, in the conversation, BOTH named a direction AND articulated a real concept of the solution (beyond a bare label). reply.text briefly acknowledges and says you will set their decision down. Do NOT summon the council on a "commit" turn. If the concept is still only a label, stay "ready" and keep pushing — do not set "commit".
+
 === HOW YOU REPLY ===
-Provide your turn by calling the "facilitator_turn" tool. Fill: reply.text (your single facilitator voice for this turn, in markdown), reply.figures (the short headline fact-sheet values you cited, e.g. "-€190,705" or "~€540k"; empty array if none), note (one short stage line, or ""), the updated state (decided / rejected / open / direction), and summon (mode + ids).
+Provide your turn by calling the "facilitator_turn" tool. Fill: reply.text (your single facilitator voice for this turn, in markdown), reply.figures (the short headline fact-sheet values you cited, e.g. "-€190,705" or "~€540k"; empty array if none), note (one short stage line, or ""), the updated state (decided / rejected / open / direction), summon (mode + ids), and closing (stage: none / ready / commit).
 RULES:
 - reply.text is ALWAYS present — it is your single default voice for the turn.
+- closing.stage stays "none" unless you are driving to the close (see DRIVING TO THE CLOSE). Never summon the council on a "ready" or "commit" turn.
 - Give DATA freely (put the cited fact-sheet numbers in figures); WITHHOLD the decision.
 - On a JUDGMENT turn, reply.text ends with a question and does NOT state which door is right.
 - English only.`;
@@ -244,6 +252,42 @@ RULES:
 // Synthesis runs as plain prose (no structured output needed), so it has its own
 // lightweight system prompt — keeps it robust and stops it emitting stray JSON.
 const SYNTH_SYSTEM = `You are the FACILITATOR of "IEDC Leadership Lab", synthesizing what the council just said for the decision-maker. Pull the threads together and name the REAL fault line between the mentors (for example: how fast to move vs what to sacrifice). Add NO opinion of your own, pick NO door, and reveal no private analysis. Keep it to 2–4 short sentences, markdown, projector-readable, and end with ONE question that helps the decision-maker weigh it and decide. Return ONLY that prose — no JSON, no preamble.`;
+
+// ============================================================
+//  THE CLOSING — the REGISTRAR sets the decision-maker's OWN decision down as a
+//  structured record, centered on the concept of the solution. It records; it
+//  does NOT coach, grade, or pick a door, and it NEVER sees the instructor layer.
+// ============================================================
+const RECORD_SYSTEM = `You are the REGISTRAR of "IEDC Leadership Lab": the clerk who sets the decision-maker's own decision down on the record at the close of the case. You are not a mentor and not the Socratic facilitator. You do not argue, coach, grade, or pick a door. You record THEIR decision, faithfully and in their interest.
+
+WHAT YOU PRODUCE: a short, dignified DECISION RECORD centered on the CONCEPT OF THE SOLUTION. ASSEMBLE it from what the participant ACTUALLY said in the conversation and from the running state you have been keeping — you are reporting their own reasoning back to them coherently for the first time, NOT inventing it. It reads like the minutes a serious operator keeps. Specific, plain, no flattery, no score.
+
+THE HEART: a door label ("door three", "the AI hub") is only a DIRECTION, not the decision. The real decision is the CONCEPT OF THE SOLUTION: what IEDC actually builds and offers, for whom, and what makes it distinctly IEDC that a McKinsey, Coursera, or local university could not replicate. Center the record on the concept the participant articulated, in their own terms. If they only ever gave a label and never a real concept, say so plainly in the concept section rather than inventing one for them.
+
+GROUNDING:
+- IEDC's audited figures (the fact-sheet) are Tier 1: exact and locked. Cite them in the evidence section where they ground the decision (the structural gap of about €540k, €130k cash, 14 FTE, the finished 550 m² capacity). Never invent an IEDC figure.
+- If the participant never committed to a direction, say so plainly and keep the rest honest. Do NOT manufacture a decision they did not make.
+
+NEVER: reveal or imply a "correct" door; grade, score, or praise; add an epilogue or a "what IEDC actually did" reveal. There is no right answer here, only their decision, recorded. English only.
+
+THE SEVEN SECTIONS, in this order. Fill each as tight markdown, one to three short sentences, or a few bullets where a list is genuinely clearer:
+1. direction: which door they committed to, named plainly.
+2. concept: THE CONCEPT OF THE SOLUTION. What IEDC builds and offers, for whom, and what makes it distinctly IEDC that competitors cannot replicate. The spine of the record. Make it sharp, in their own terms.
+3. reasoning: why this concept, and why over the doors they rejected.
+4. evidence: the facts and figures from the case that ground it. Cite Tier 1 numbers where they matter.
+5. risks: the risks the council surfaced that the participant is knowingly accepting.
+6. consequences: the projected consequences over time — year 1, year 2, year 3 — as the participant reasoned them. If they did not reason it out, write one short line inviting them to fill it in; do not invent specifics.
+7. core_bet: the central assumption the whole decision rests on.
+
+Also fill "headline": their decision in a single clear sentence.
+
+Provide the record by calling the "decision_record" tool. Every field is shown to the decision-maker as markdown, and they can edit it before they confirm.
+
+=== THE CASE ===
+${CASE_TEXT}
+
+=== FACT-SHEET (IEDC's own audited figures; never invent numbers) ===
+${FACT_SHEET}`;
 
 // Forced-structured-output tool for the facilitator turn. Using tool-use means
 // the model fills a typed schema and Anthropic returns it already-parsed, so an
@@ -288,8 +332,37 @@ const TURN_TOOL = {
         },
         required: ["mode", "ids"],
       },
+      closing: {
+        type: "object",
+        properties: {
+          stage: { type: "string", enum: ["none", "ready", "commit"], description: "drive-to-close stage for this turn" },
+        },
+        required: ["stage"],
+      },
     },
-    required: ["reply", "note", "state", "summon"],
+    required: ["reply", "note", "state", "summon", "closing"],
+  },
+};
+
+// Forced-structured-output tool for the closing decision record. Same tool-use
+// discipline as the turn: Anthropic returns the typed object already parsed, so
+// quotes or newlines inside a section can never break it.
+const RECORD_TOOL = {
+  name: "decision_record",
+  description: "Set the decision-maker's own decision down as a structured record, centered on the concept of the solution.",
+  input_schema: {
+    type: "object",
+    properties: {
+      headline: { type: "string", description: "their decision in a single clear sentence" },
+      direction: { type: "string", description: "which door they committed to, named plainly (markdown)" },
+      concept: { type: "string", description: "the concept of the solution: what IEDC builds/offers, for whom, what makes it distinctly IEDC; the spine, 2-3 sentences (markdown)" },
+      reasoning: { type: "string", description: "why this concept, and why over the rejected doors (markdown)" },
+      evidence: { type: "string", description: "the case facts/figures that ground it; cite Tier 1 numbers (markdown)" },
+      risks: { type: "string", description: "the risks the council surfaced that they are knowingly accepting (markdown)" },
+      consequences: { type: "string", description: "projected consequences over time: year 1, year 2, year 3 (markdown)" },
+      core_bet: { type: "string", description: "the central assumption the whole decision rests on (markdown)" },
+    },
+    required: ["headline", "direction", "concept", "reasoning", "evidence", "risks", "consequences", "core_bet"],
   },
 };
 
@@ -553,6 +626,9 @@ Deno.serve(async (req) => {
           mode: ["none", "all", "named", "auto"].includes(summon?.mode) ? summon.mode : "none",
           ids: Array.isArray(summon?.ids) ? summon.ids.filter((id: string) => PERSONA_META.some((m) => m.id === id)) : [],
         },
+        closing: {
+          stage: ["none", "ready", "commit"].includes(parsed?.closing?.stage) ? parsed.closing.stage : "none",
+        },
       };
       const tSent = Date.now();
       // One Facilitator turn = exactly ONE Anthropic call. This line separates the
@@ -601,6 +677,32 @@ Deno.serve(async (req) => {
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
       const text = await callAnthropic(SYNTH_SYSTEM, user, 700, `${reqId} synthesize`);
       return json({ text: String(text ?? "").trim() });
+    }
+
+    // The closing: set the decision-maker's OWN decision down as a structured
+    // record, centered on the concept of the solution. Forced tool-use (no
+    // JSON.parse of free text). Records their decision; never grades or picks a
+    // door; never sees the instructor layer. The client falls back to a
+    // state-built record if this action is not deployed yet.
+    if (action === "record") {
+      const user =
+        `${formatState(state)}\n\n` +
+        `THE FULL EXCHANGE:\n${formatTranscript(history)}\n\n` +
+        `Set the decision-maker's decision down now by calling the decision_record tool. Center it on the concept of the solution. Reflect THEIR decision and reasoning faithfully; cite Tier 1 figures where they sharpen it; if they never committed, say so plainly. No score, no right answer, no epilogue.`;
+      const rec = await callAnthropicJSON(RECORD_SYSTEM, user, RECORD_TOOL, 1700, `${reqId} record`);
+      const str = (v: any) => String(v ?? "").trim();
+      return json({
+        record: {
+          headline: str(rec?.headline),
+          direction: str(rec?.direction),
+          concept: str(rec?.concept),
+          reasoning: str(rec?.reasoning),
+          evidence: str(rec?.evidence),
+          risks: str(rec?.risks),
+          consequences: str(rec?.consequences),
+          core_bet: str(rec?.core_bet),
+        },
+      });
     }
 
     return json({ error: "unknown action" }, 400);

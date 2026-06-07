@@ -55,7 +55,7 @@ export const MENTORS: Mentor[] = [
     name: "The Ethical Challenger",
     school: "Stakeholder ethics",
     blurb:
-      "Asks who bears the cost that wasn't in the room, and whether the decision would survive the front page.",
+      "Asks who bears the cost no one accounted for, and whether the decision would survive the front page.",
   },
 ];
 
@@ -80,14 +80,73 @@ export const EMPTY_STATE: ConvState = { decided: [], rejected: [], open: [], dir
 // Who the facilitator decided to convene this turn.
 export type Summon = { mode: "none" | "all" | "named" | "auto"; ids: string[] };
 
-// `turn` response: single facilitator voice + updated state + summon decision.
-export type TurnResponse = { reply: Reply; note: string; state: ConvState; summon: Summon };
+// The drive-to-close signal the Facilitator sets each turn (see the Edge Function).
+export type Closing = { stage: "none" | "ready" | "commit" };
+
+// `turn` response: single facilitator voice + updated state + summon + close signal.
+export type TurnResponse = { reply: Reply; note: string; state: ConvState; summon: Summon; closing: Closing };
 
 // One persona's statement (the `persona` action).
 export type PersonaStatement = { id: string; name: string; school: string; message: string };
 
 // The facilitator synthesis after a full council (the `synthesize` action).
 export type SynthesizeResponse = { text: string };
+
+// ---- The closing: the decision record (the `record` action). Seven sections,
+// centered on the concept of the solution. Every field is markdown and editable. ----
+export type DecisionRecord = {
+  headline: string;
+  direction: string;
+  concept: string;
+  reasoning: string;
+  evidence: string;
+  risks: string;
+  consequences: string;
+  core_bet: string;
+};
+
+// Canonical section order + labels, shared by the editor and the final record.
+// The seven-part template from cc_closing_sequence.md, in order. The concept of
+// the solution is the spine of the record.
+export const RECORD_SECTIONS: {
+  key: Exclude<keyof DecisionRecord, "headline">;
+  n: string;
+  label: string;
+  hint: string;
+}[] = [
+  { key: "direction", n: "01", label: "The direction", hint: "Which door you committed to." },
+  { key: "concept", n: "02", label: "The concept of the solution", hint: "What IEDC builds and offers, for whom, and what makes it distinctly IEDC that a competitor cannot replicate." },
+  { key: "reasoning", n: "03", label: "The reasoning", hint: "Why this concept, and why not the doors you turned down." },
+  { key: "evidence", n: "04", label: "The evidence", hint: "The facts and figures from the case that ground it." },
+  { key: "risks", n: "05", label: "The risks acknowledged", hint: "What the council surfaced that you are accepting." },
+  { key: "consequences", n: "06", label: "Projected consequences", hint: "What follows in year one, year two, year three." },
+  { key: "core_bet", n: "07", label: "The core bet", hint: "The central assumption the whole decision rests on." },
+];
+
+// Client-side fallback: build a record straight from the Facilitator's distilled
+// state tabs, so the close still works if the `record` edge action is not deployed
+// yet (or fails). Blank fields render as editable prompts, never as errors.
+export function recordFromState(state: ConvState): DecisionRecord {
+  const dir = (state.direction || "").trim();
+  const committed = !!dir && !/^undecided/i.test(dir);
+  const join = (a: string[]) => (a && a.length ? a.map((x) => `- ${x}`).join("\n") : "");
+  const reasoning = [
+    join(state.decided ?? []),
+    state.rejected?.length ? `Set aside: ${state.rejected.join("; ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    headline: committed ? dir : "The case rests undecided.",
+    direction: committed ? dir : "No single direction was committed. The case rests undecided.",
+    concept: "",
+    reasoning,
+    evidence: "",
+    risks: join(state.open ?? []),
+    consequences: "",
+    core_bet: "",
+  };
+}
 
 // ---- Transcript (flat, in-memory). `note` entries are display-only and are
 // NOT sent back to the model as history. ----
