@@ -331,9 +331,11 @@ ${list(state.open)}
 CURRENT LEANING: ${state.direction || "undecided"}`;
 }
 
-async function callAnthropic(system: string, user: string, maxTokens = 1400): Promise<string> {
+async function callAnthropic(system: string, user: string, maxTokens = 1400, tag = ""): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
+  const t1 = Date.now();
+  console.log(`[sim ${tag}] before Anthropic call @ ${new Date(t1).toISOString()}`);
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -348,6 +350,8 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
       messages: [{ role: "user", content: user }],
     }),
   });
+  const t2 = Date.now();
+  console.log(`[sim ${tag}] after Anthropic response @ ${new Date(t2).toISOString()} (model ${t2 - t1}ms)`);
   if (!res.ok) {
     const t = await res.text();
     console.error(`Anthropic ${res.status}:`, t);
@@ -360,9 +364,11 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
 // Forced structured output via tool-use. Returns the tool input object already
 // parsed by Anthropic — no JSON.parse of free text, so malformed model JSON
 // (unescaped quotes/newlines) can never throw here.
-async function callAnthropicJSON(system: string, user: string, tool: any, maxTokens = 1600): Promise<any> {
+async function callAnthropicJSON(system: string, user: string, tool: any, maxTokens = 1600, tag = ""): Promise<any> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
+  const t1 = Date.now();
+  console.log(`[sim ${tag}] before Anthropic call @ ${new Date(t1).toISOString()}`);
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -375,6 +381,8 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
       tool_choice: { type: "tool", name: tool.name },
     }),
   });
+  const t2 = Date.now();
+  console.log(`[sim ${tag}] after Anthropic response @ ${new Date(t2).toISOString()} (model ${t2 - t1}ms)`);
   if (!res.ok) {
     const t = await res.text();
     console.error(`Anthropic ${res.status}:`, t);
@@ -504,9 +512,12 @@ function sanitizePriorStatements(raw: unknown): any[] {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const t0 = Date.now();
+  const reqId = crypto.randomUUID().slice(0, 8);
   try {
     const body = await req.json();
     const { action } = body;
+    console.log(`[sim ${reqId}] ${action} request arrived @ ${new Date(t0).toISOString()}`);
 
     // Static case text — no AI call, so the case display is bulletproof.
     if (action === "case") {
@@ -527,7 +538,7 @@ Deno.serve(async (req) => {
         `RECENT EXCHANGE:\n${recentTail(history)}\n\n` +
         `PARTICIPANT (this turn): ${message}\n\n` +
         `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
-      const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600);
+      const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600, `${reqId} turn`);
       const summon = parsed?.summon ?? { mode: "none", ids: [] };
       return json({
         reply: {
@@ -561,7 +572,7 @@ Deno.serve(async (req) => {
         `WHAT THE DECISION-MAKER IS WEIGHING (this turn): ${message || "(reacting to where things stand)"}\n\n` +
         `OTHER MENTORS WHO HAVE ALREADY SPOKEN THIS ROUND:\n${priorsText}\n\n` +
         `React now, in your own voice, to the decision-maker's thinking. If you disagree with a mentor above, say so and name them. Do not repeat their point. Tight: 2–4 short sentences or a few bullets, markdown.`;
-      const text = await callAnthropic(buildPersonaSystem(personaId), user, 600);
+      const text = await callAnthropic(buildPersonaSystem(personaId), user, 600, `${reqId} persona:${personaId}`);
       return json(decoratePersona(personaId, text.trim()));
     }
 
@@ -577,7 +588,7 @@ Deno.serve(async (req) => {
         `${formatState(state)}\n\n` +
         `THE COUNCIL JUST SAID:\n${stmtText}\n\n` +
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
-      const text = await callAnthropic(SYNTH_SYSTEM, user, 700);
+      const text = await callAnthropic(SYNTH_SYSTEM, user, 700, `${reqId} synthesize`);
       return json({ text: String(text ?? "").trim() });
     }
 
