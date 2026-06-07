@@ -14,13 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_spend: {
+        Row: {
+          id: number
+          total_micro_eur: number
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          total_micro_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          total_micro_eur?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      bump_ai_spend: { Args: { amount_micro: number }; Returns: number }
     }
     Enums: {
       [_ in never]: never
