@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.bump_ai_spend(bigint) FROM anon, authenticated;
