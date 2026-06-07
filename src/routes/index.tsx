@@ -122,6 +122,13 @@ function App() {
     }
   }, []);
 
+  // Jump to the top on every screen change — you've usually scrolled down to
+  // reach the button at the bottom of the previous screen, and the next one
+  // should open at its top, not wherever you left off.
+  useEffect(() => {
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }, [phase]);
+
   // The "I'm ready" click is the user gesture that lets the welcome audio play
   // without browser autoplay blocking. Start it here, then reveal the intro.
   function onReady() {
