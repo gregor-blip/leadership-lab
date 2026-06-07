@@ -13,7 +13,6 @@ import {
 } from "@/lib/simulator-data";
 import { getCase, sendTurn, callPersona, synthesize } from "@/lib/simulator-client";
 import { Component, type ReactNode } from "react";
-import { AuthGate } from "@/components/AuthGate";
 
 // Per-message error boundary: a malformed model payload degrades to an inline
 // note instead of blanking the whole app (the root boundary would take the page).
@@ -43,7 +42,7 @@ export const Route = createFileRoute("/")({
   component: App,
 });
 
-type Phase = "onboarding" | "conversation";
+type Phase = "gate" | "intro" | "onboarding" | "conversation";
 
 // Offline preview (?preview=1): seed a representative transcript so every card
 // type renders without the edge function. Dev/demo aid only; no backend call.
@@ -106,12 +105,14 @@ const PREVIEW_SEED: TranscriptEntry[] = [
 ];
 
 function App() {
-  const [phase, setPhase] = useState<Phase>("onboarding");
+  const [phase, setPhase] = useState<Phase>("gate");
   const [caseText, setCaseText] = useState<string>("");
   const [loadingCase, setLoadingCase] = useState(false);
   const [seed, setSeed] = useState<TranscriptEntry[] | null>(null);
+  const [muted, setMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Client-only: enter the conversation pre-seeded when ?preview=1.
+  // Client-only: ?preview=1 jumps straight to a seeded conversation (skips gate + intro).
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("preview") === "1") {
@@ -120,6 +121,27 @@ function App() {
       setPhase("conversation");
     }
   }, []);
+
+  // The "I'm ready" click is the user gesture that lets the welcome audio play
+  // without browser autoplay blocking. Start it here, then reveal the intro.
+  function onReady() {
+    audioRef.current?.play().catch(() => {});
+    setPhase("intro");
+  }
+  function replayAudio() {
+    const a = audioRef.current;
+    if (!a) return;
+    a.muted = false;
+    setMuted(false);
+    a.currentTime = 0;
+    a.play().catch(() => {});
+  }
+  function toggleMute() {
+    const a = audioRef.current;
+    const next = !muted;
+    setMuted(next);
+    if (a) a.muted = next;
+  }
 
   async function begin() {
     setLoadingCase(true);
@@ -135,22 +157,150 @@ function App() {
   }
 
   return (
-    <AuthGate>
-      <div className="relative min-h-[100dvh] bg-paper">
-        <Toaster position="top-right" />
-        <div className="relative z-[2] mx-auto max-w-[1200px] px-5 pb-16 pt-7 md:px-10 md:pt-10">
-          <Masthead inCase={phase === "conversation"} />
-          <main>
-            {phase === "onboarding" ? (
-              <OnboardingBrief loading={loadingCase} onBegin={begin} />
-            ) : (
-              <Conversation caseText={caseText} seed={seed} />
-            )}
-          </main>
-          <Footer />
+    <>
+      <Toaster position="top-right" />
+      {/* Audio lives at the root so the gate's click can start it and the intro can control it. */}
+      <audio ref={audioRef} src="/audio/intro-welcome.mp3" preload="auto" />
+
+      {phase === "gate" ? (
+        <AudioGate onReady={onReady} />
+      ) : (
+        <div className="relative min-h-[100dvh] bg-paper">
+          <div className="relative z-[2] mx-auto max-w-[1200px] px-5 pb-16 pt-7 md:px-10 md:pt-10">
+            <Masthead inCase={phase === "conversation"} />
+            <main>
+              {phase === "intro" ? (
+                <IntroPage
+                  onBegin={() => setPhase("onboarding")}
+                  muted={muted}
+                  onReplay={replayAudio}
+                  onToggleMute={toggleMute}
+                />
+              ) : phase === "onboarding" ? (
+                <OnboardingBrief loading={loadingCase} onBegin={begin} />
+              ) : (
+                <Conversation caseText={caseText} seed={seed} />
+              )}
+            </main>
+            <Footer />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- audio gate + intro (shown before the dashboard) ---------- */
+
+// One calm screen: get the volume up and the click that unlocks audio autoplay.
+function AudioGate({ onReady }: { onReady: () => void }) {
+  return (
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-paper px-6 text-center">
+      <div className="reveal kicker mb-7">IEDC · Leadership Lab</div>
+      <h1 className="reveal reveal-1 display max-w-[18ch] text-[clamp(34px,6vw,72px)] leading-[1.02] text-ink">
+        This experience has <span className="em">sound</span>.
+      </h1>
+      <p className="reveal reveal-2 mt-6 max-w-[40ch] text-[clamp(15px,2vw,19px)] leading-relaxed text-ink-soft">
+        Turn your volume up. There&rsquo;s a short welcome before you begin.
+      </p>
+      <button onClick={onReady} className="btn btn-primary reveal reveal-3 mt-10">
+        I&rsquo;m ready
+        <span className="nub" aria-hidden>
+          <ArrowIcon />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// The welcome page. Reads completely in silence; the voiceover is enhancement.
+function IntroPage({
+  onBegin,
+  muted,
+  onReplay,
+  onToggleMute,
+}: {
+  onBegin: () => void;
+  muted: boolean;
+  onReplay: () => void;
+  onToggleMute: () => void;
+}) {
+  const body = "text-[clamp(16px,1.5vw,18px)] leading-relaxed text-ink-soft";
+  return (
+    <section className="pb-10 pt-2">
+      <div className="reveal flex items-center justify-between gap-4">
+        <div className="kicker">A welcome before you begin</div>
+        <div className="flex items-center gap-2">
+          <button onClick={onReplay} className="btn btn-ghost !px-3 !py-1.5 text-[10px]">
+            Replay
+          </button>
+          <button onClick={onToggleMute} className="btn btn-ghost !px-3 !py-1.5 text-[10px]">
+            {muted ? "Unmute" : "Mute"}
+          </button>
         </div>
       </div>
-    </AuthGate>
+
+      <h1 className="reveal reveal-1 display mt-7 text-[clamp(44px,7vw,96px)] text-ink">Welcome.</h1>
+
+      <div className={`reveal reveal-2 mt-6 max-w-[60ch] space-y-5 ${body}`}>
+        <p>
+          What you&rsquo;re about to use isn&rsquo;t a presentation. It&rsquo;s a working piece of something
+          larger, and I wanted you to <span className="text-ink">feel it</span>, not just hear me describe it.
+        </p>
+        <p>
+          This is the <span className="text-ink">student&rsquo;s layer</span>, one of three. It&rsquo;s the part
+          a student touches when a case is no longer paper in a folder, but a living situation they can step
+          into, question, and argue with.
+        </p>
+        <p className="text-ink">It&rsquo;s live. So treat it that way:</p>
+      </div>
+
+      <div className="reveal reveal-3 mt-5 max-w-[60ch] bezel">
+        <div className="bezel-core divide-y divide-hair">
+          <MoveRow n="1" text="Ask it for any number from IEDC's real accounts, and watch it answer." />
+          <MoveRow n="2" text="Summon a single mentor when you want one voice." />
+          <MoveRow
+            n="3"
+            text="Convene the whole council on the decision, and watch five of them disagree, with each other, and with you."
+          />
+        </div>
+      </div>
+
+      <div className={`reveal reveal-4 mt-6 max-w-[60ch] space-y-5 ${body}`}>
+        <p>
+          <span className="text-ink">Don&rsquo;t judge it on polish. Judge it on what it points to.</span> A
+          school where learning is immersive. Where a case talks back. Where the experience is the lesson.
+        </p>
+        <p>
+          This is one third of the picture. Behind it sit the school&rsquo;s layer and the professor&rsquo;s
+          layer, where teaching itself is reimagined. But that&rsquo;s for later.
+        </p>
+        <p>
+          And it works two ways: alongside students in the classroom, or as the heart of{" "}
+          <span className="text-ink">hybrid learning</span>, where the cases they&rsquo;d solve in any class come
+          alive online, instead of arriving as paper.
+        </p>
+      </div>
+
+      <div className="reveal reveal-5 mt-9 flex flex-wrap items-center gap-4 border-t border-rule pt-7">
+        <button onClick={onBegin} className="btn btn-primary">
+          Begin
+          <span className="nub" aria-hidden>
+            <ArrowIcon />
+          </span>
+        </button>
+        <span className="kicker">Enter the case</span>
+      </div>
+    </section>
+  );
+}
+
+function MoveRow({ n, text }: { n: string; text: string }) {
+  return (
+    <div className="flex items-start gap-4 px-5 py-4">
+      <span className="section-num shrink-0 text-[22px] leading-none">{n}</span>
+      <span className="text-[clamp(15px,1.6vw,17px)] leading-relaxed text-ink">{text}</span>
+    </div>
   );
 }
 

@@ -331,81 +331,6 @@ ${list(state.open)}
 CURRENT LEANING: ${state.direction || "undecided"}`;
 }
 
-// ============================================================
-//  SPEND CAP — project-wide, micro-EUR. Soft warn at €18, hard stop at €20.
-//  Pricing: claude-sonnet-4 ≈ $3 / Mtok input, $15 / Mtok output.
-//  USD→EUR @ ~0.92 → €2.76 / Mtok input, €13.80 / Mtok output.
-//  Micro-EUR (1e-6 €) per token: input 2.76, output 13.80.
-// ============================================================
-const HARD_CAP_MICRO_EUR = 20_000_000n; // €20
-const WARN_CAP_MICRO_EUR = 18_000_000n; // €18
-const PRICE_IN_MICRO_PER_TOKEN = 2.76;
-const PRICE_OUT_MICRO_PER_TOKEN = 13.80;
-
-// Per-request mutable warn flag, set by post-call bump.
-let __reqWarn = false;
-
-function sbAdminHeaders(): Record<string, string> {
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  return {
-    apikey: key,
-    authorization: `Bearer ${key}`,
-    "content-type": "application/json",
-  };
-}
-
-async function readSpendTotal(): Promise<bigint> {
-  const url = Deno.env.get("SUPABASE_URL");
-  if (!url) throw new Error("SUPABASE_URL not configured");
-  const res = await fetch(`${url}/rest/v1/rpc/bump_ai_spend`, {
-    method: "POST",
-    headers: sbAdminHeaders(),
-    body: JSON.stringify({ amount_micro: 0 }),
-  });
-  if (!res.ok) {
-    console.error("spend read failed", res.status, await res.text());
-    return 0n;
-  }
-  const v = await res.json();
-  return BigInt(v ?? 0);
-}
-
-async function bumpSpend(amountMicro: number): Promise<bigint> {
-  const url = Deno.env.get("SUPABASE_URL");
-  if (!url) throw new Error("SUPABASE_URL not configured");
-  const amt = Math.max(0, Math.round(amountMicro));
-  const res = await fetch(`${url}/rest/v1/rpc/bump_ai_spend`, {
-    method: "POST",
-    headers: sbAdminHeaders(),
-    body: JSON.stringify({ amount_micro: amt }),
-  });
-  if (!res.ok) {
-    console.error("spend bump failed", res.status, await res.text());
-    return 0n;
-  }
-  const v = await res.json();
-  return BigInt(v ?? 0);
-}
-
-class SpendCapError extends Error {
-  constructor(public totalMicro: bigint) {
-    super("spend_cap_reached");
-  }
-}
-
-async function preCheckSpendCap(): Promise<void> {
-  const total = await readSpendTotal();
-  if (total >= HARD_CAP_MICRO_EUR) throw new SpendCapError(total);
-}
-
-async function recordUsage(usage: any): Promise<void> {
-  const inTok = Number(usage?.input_tokens ?? 0);
-  const outTok = Number(usage?.output_tokens ?? 0);
-  const cost = inTok * PRICE_IN_MICRO_PER_TOKEN + outTok * PRICE_OUT_MICRO_PER_TOKEN;
-  const total = await bumpSpend(cost);
-  if (total >= WARN_CAP_MICRO_EUR) __reqWarn = true;
-}
-
 async function callAnthropic(system: string, user: string, maxTokens = 1400): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -429,10 +354,12 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
-  await recordUsage(data?.usage);
   return data.content?.[0]?.text ?? "";
 }
 
+// Forced structured output via tool-use. Returns the tool input object already
+// parsed by Anthropic — no JSON.parse of free text, so malformed model JSON
+// (unescaped quotes/newlines) can never throw here.
 async function callAnthropicJSON(system: string, user: string, tool: any, maxTokens = 1600): Promise<any> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -454,7 +381,6 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
-  await recordUsage(data?.usage);
   const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
   if (!block || !block.input) throw new Error("no tool_use block in response");
   return block.input;
@@ -576,13 +502,8 @@ function sanitizePriorStatements(raw: unknown): any[] {
     .filter(Boolean) as any[];
 }
 
-function withWarn(payload: any): any {
-  return __reqWarn ? { ...payload, __warn: "approaching_cap" } : payload;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  __reqWarn = false;
   try {
     const body = await req.json();
     const { action } = body;
@@ -591,9 +512,6 @@ Deno.serve(async (req) => {
     if (action === "case") {
       return json({ caseText: CASE_TEXT });
     }
-
-    // Pre-check the project-wide spend cap before any billable Anthropic call.
-    await preCheckSpendCap();
 
     const history = sanitizeHistory(body.history);
     const state = sanitizeState(body.state);
@@ -611,7 +529,7 @@ Deno.serve(async (req) => {
         `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
       const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600);
       const summon = parsed?.summon ?? { mode: "none", ids: [] };
-      return json(withWarn({
+      return json({
         reply: {
           text: String(parsed?.reply?.text ?? ""),
           figures: Array.isArray(parsed?.reply?.figures) ? parsed.reply.figures : [],
@@ -622,9 +540,12 @@ Deno.serve(async (req) => {
           mode: ["none", "all", "named", "auto"].includes(summon?.mode) ? summon.mode : "none",
           ids: Array.isArray(summon?.ids) ? summon.ids.filter((id: string) => PERSONA_META.some((m) => m.id === id)) : [],
         },
-      }));
+      });
     }
 
+    // One persona statement. Single-summon = one call. Full council = the frontend
+    // calls this once per persona, passing the prior personas' statements so each
+    // genuinely responds to and disagrees with the ones before it.
     if (action === "persona") {
       const personaId = String(body.personaId ?? "");
       if (!PERSONA_META.some((m) => m.id === personaId)) return json({ error: "unknown persona" }, 400);
@@ -641,9 +562,12 @@ Deno.serve(async (req) => {
         `OTHER MENTORS WHO HAVE ALREADY SPOKEN THIS ROUND:\n${priorsText}\n\n` +
         `React now, in your own voice, to the decision-maker's thinking. If you disagree with a mentor above, say so and name them. Do not repeat their point. Tight: 2–4 short sentences or a few bullets, markdown.`;
       const text = await callAnthropic(buildPersonaSystem(personaId), user, 600);
-      return json(withWarn(decoratePersona(personaId, text.trim())));
+      return json(decoratePersona(personaId, text.trim()));
     }
 
+    // Facilitator synthesis after a full council. Pulls the threads together,
+    // surfaces the real fault line, ends with a question. Adds NO sixth opinion,
+    // picks NO side, reveals NO instructor layer.
     if (action === "synthesize") {
       const statements = sanitizePriorStatements(body.statements);
       const stmtText = statements.length
@@ -654,17 +578,12 @@ Deno.serve(async (req) => {
         `THE COUNCIL JUST SAID:\n${stmtText}\n\n` +
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
       const text = await callAnthropic(SYNTH_SYSTEM, user, 700);
-      return json(withWarn({ text: String(text ?? "").trim() }));
+      return json({ text: String(text ?? "").trim() });
     }
 
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    if (e instanceof SpendCapError) {
-      return json({
-        error: "demo_cap_reached",
-        message: "This demo has reached its €20 spend cap. The simulator is paused.",
-      }, 429);
-    }
+    // Keep upstream detail server-side only; never echo Anthropic bodies to clients.
     console.error("simulator error:", e);
     return json({ error: "An error occurred. Please try again." }, 500);
   }
