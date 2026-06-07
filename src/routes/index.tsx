@@ -13,6 +13,7 @@ import {
 } from "@/lib/simulator-data";
 import { getCase, sendTurn, callPersona, synthesize } from "@/lib/simulator-client";
 import { Component, type ReactNode } from "react";
+import { AuthGate } from "@/components/AuthGate";
 
 // Per-message error boundary: a malformed model payload degrades to an inline
 // note instead of blanking the whole app (the root boundary would take the page).
@@ -134,20 +135,22 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] bg-paper">
-      <Toaster position="top-right" />
-      <div className="relative z-[2] mx-auto max-w-[1200px] px-5 pb-16 pt-7 md:px-10 md:pt-10">
-        <Masthead inCase={phase === "conversation"} />
-        <main>
-          {phase === "onboarding" ? (
-            <OnboardingBrief loading={loadingCase} onBegin={begin} />
-          ) : (
-            <Conversation caseText={caseText} seed={seed} />
-          )}
-        </main>
-        <Footer />
+    <AuthGate>
+      <div className="relative min-h-[100dvh] bg-paper">
+        <Toaster position="top-right" />
+        <div className="relative z-[2] mx-auto max-w-[1200px] px-5 pb-16 pt-7 md:px-10 md:pt-10">
+          <Masthead inCase={phase === "conversation"} />
+          <main>
+            {phase === "onboarding" ? (
+              <OnboardingBrief loading={loadingCase} onBegin={begin} />
+            ) : (
+              <Conversation caseText={caseText} seed={seed} />
+            )}
+          </main>
+          <Footer />
+        </div>
       </div>
-    </div>
+    </AuthGate>
   );
 }
 
