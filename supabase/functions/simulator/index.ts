@@ -576,8 +576,13 @@ function sanitizePriorStatements(raw: unknown): any[] {
     .filter(Boolean) as any[];
 }
 
+function withWarn(payload: any): any {
+  return __reqWarn ? { ...payload, __warn: "approaching_cap" } : payload;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  __reqWarn = false;
   try {
     const body = await req.json();
     const { action } = body;
@@ -586,6 +591,9 @@ Deno.serve(async (req) => {
     if (action === "case") {
       return json({ caseText: CASE_TEXT });
     }
+
+    // Pre-check the project-wide spend cap before any billable Anthropic call.
+    await preCheckSpendCap();
 
     const history = sanitizeHistory(body.history);
     const state = sanitizeState(body.state);
@@ -603,7 +611,7 @@ Deno.serve(async (req) => {
         `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
       const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600);
       const summon = parsed?.summon ?? { mode: "none", ids: [] };
-      return json({
+      return json(withWarn({
         reply: {
           text: String(parsed?.reply?.text ?? ""),
           figures: Array.isArray(parsed?.reply?.figures) ? parsed.reply.figures : [],
@@ -614,12 +622,9 @@ Deno.serve(async (req) => {
           mode: ["none", "all", "named", "auto"].includes(summon?.mode) ? summon.mode : "none",
           ids: Array.isArray(summon?.ids) ? summon.ids.filter((id: string) => PERSONA_META.some((m) => m.id === id)) : [],
         },
-      });
+      }));
     }
 
-    // One persona statement. Single-summon = one call. Full council = the frontend
-    // calls this once per persona, passing the prior personas' statements so each
-    // genuinely responds to and disagrees with the ones before it.
     if (action === "persona") {
       const personaId = String(body.personaId ?? "");
       if (!PERSONA_META.some((m) => m.id === personaId)) return json({ error: "unknown persona" }, 400);
@@ -636,12 +641,9 @@ Deno.serve(async (req) => {
         `OTHER MENTORS WHO HAVE ALREADY SPOKEN THIS ROUND:\n${priorsText}\n\n` +
         `React now, in your own voice, to the decision-maker's thinking. If you disagree with a mentor above, say so and name them. Do not repeat their point. Tight: 2–4 short sentences or a few bullets, markdown.`;
       const text = await callAnthropic(buildPersonaSystem(personaId), user, 600);
-      return json(decoratePersona(personaId, text.trim()));
+      return json(withWarn(decoratePersona(personaId, text.trim())));
     }
 
-    // Facilitator synthesis after a full council. Pulls the threads together,
-    // surfaces the real fault line, ends with a question. Adds NO sixth opinion,
-    // picks NO side, reveals NO instructor layer.
     if (action === "synthesize") {
       const statements = sanitizePriorStatements(body.statements);
       const stmtText = statements.length
@@ -652,12 +654,17 @@ Deno.serve(async (req) => {
         `THE COUNCIL JUST SAID:\n${stmtText}\n\n` +
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
       const text = await callAnthropic(SYNTH_SYSTEM, user, 700);
-      return json({ text: String(text ?? "").trim() });
+      return json(withWarn({ text: String(text ?? "").trim() }));
     }
 
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    // Keep upstream detail server-side only; never echo Anthropic bodies to clients.
+    if (e instanceof SpendCapError) {
+      return json({
+        error: "demo_cap_reached",
+        message: "This demo has reached its €20 spend cap. The simulator is paused.",
+      }, 429);
+    }
     console.error("simulator error:", e);
     return json({ error: "An error occurred. Please try again." }, 500);
   }
