@@ -538,9 +538,11 @@ Deno.serve(async (req) => {
         `RECENT EXCHANGE:\n${recentTail(history)}\n\n` +
         `PARTICIPANT (this turn): ${message}\n\n` +
         `Respond as the Socratic facilitator by calling the facilitator_turn tool. Give data freely; withhold judgment and ask. Update and return the state. Decide "summon".`;
+      const tBefore = Date.now();
       const parsed = await callAnthropicJSON(FACILITATOR_SYSTEM, user, TURN_TOOL, 1600, `${reqId} turn`);
+      const tAfter = Date.now();
       const summon = parsed?.summon ?? { mode: "none", ids: [] };
-      return json({
+      const payload = {
         reply: {
           text: String(parsed?.reply?.text ?? ""),
           figures: Array.isArray(parsed?.reply?.figures) ? parsed.reply.figures : [],
@@ -551,7 +553,16 @@ Deno.serve(async (req) => {
           mode: ["none", "all", "named", "auto"].includes(summon?.mode) ? summon.mode : "none",
           ids: Array.isArray(summon?.ids) ? summon.ids.filter((id: string) => PERSONA_META.some((m) => m.id === id)) : [],
         },
-      });
+      };
+      const tSent = Date.now();
+      // One Facilitator turn = exactly ONE Anthropic call. This line separates the
+      // model time from the local input/state-build cost so lag can be diagnosed.
+      console.log(
+        `[sim ${reqId}] turn response sent @ ${new Date(tSent).toISOString()} | anthropic_calls=1 | ` +
+          `pre(input+state build)=${tBefore - t0}ms | model=${tAfter - tBefore}ms | post=${tSent - tAfter}ms | ` +
+          `total=${tSent - t0}ms | history=${history.length} msgs | userPromptChars=${user.length}`
+      );
+      return json(payload);
     }
 
     // One persona statement. Single-summon = one call. Full council = the frontend
