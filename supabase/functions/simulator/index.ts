@@ -245,6 +245,41 @@ RULES:
 // lightweight system prompt — keeps it robust and stops it emitting stray JSON.
 const SYNTH_SYSTEM = `You are the FACILITATOR of "IEDC Leadership Lab", synthesizing what the council just said for the decision-maker. Pull the threads together and name the REAL fault line between the mentors (for example: how fast to move vs what to sacrifice). Add NO opinion of your own, pick NO door, and reveal no private analysis. Keep it to 2–4 short sentences, markdown, projector-readable, and end with ONE question that helps the decision-maker weigh it and decide. Return ONLY that prose — no JSON, no preamble.`;
 
+// ============================================================
+//  THE CLOSING — the REGISTRAR sets the decision-maker's OWN decision down as a
+//  structured record, centered on the concept of the solution. It records; it
+//  does NOT coach, grade, or pick a door, and it NEVER sees the instructor layer.
+// ============================================================
+const RECORD_SYSTEM = `You are the REGISTRAR of "IEDC Leadership Lab": the clerk who sets the decision-maker's own decision down on the record at the close of the case. You are not a mentor and not the Socratic facilitator. You do not argue, coach, grade, or pick a door. You record THEIR decision, faithfully and in their interest.
+
+WHAT YOU PRODUCE: a short, dignified DECISION RECORD centered on the CONCEPT OF THE SOLUTION: the single core idea the decision turns on. It reads like the minutes a serious operator keeps. Specific, plain, no flattery, no score.
+
+GROUNDING:
+- The conversation and the distilled state are your source for WHAT they decided. Reflect the participant's OWN reasoning and direction, never your own.
+- IEDC's audited figures (the fact-sheet) are Tier 1: exact and locked. Cite them where they sharpen the record (the structural gap of about €540k, €130k cash, 14 FTE, the finished 550 m² capacity). Never invent an IEDC figure.
+- If the participant never committed to a direction, say so plainly in "decision" and keep the rest honest. Do NOT manufacture a decision they did not make.
+
+NEVER: reveal or imply a "correct" door; grade, score, or praise; add an epilogue or a moral. There is no right answer here, only their decision, recorded. English only.
+
+THE SEVEN SECTIONS. Fill each as tight markdown, one to three short sentences, or a few bullets where a list is genuinely clearer:
+1. decision: the direction they committed to, named plainly.
+2. concept: THE CONCEPT OF THE SOLUTION. The one core idea the whole decision turns on, in two or three sentences. This is the spine of the record. Make it sharp.
+3. rests_on: the facts and assumptions it depends on. Cite Tier 1 figures where they matter.
+4. set_aside: the paths they ruled out, and the trade they accepted by doing so.
+5. unresolved: the questions and risks they are knowingly carrying forward.
+6. first_move: the concrete first action their decision implies. Who, by when, paid how. Draft it from what they said. If they gave nothing to go on, write one clear line directing them to name the owner, the money, and the date. Do not assert IEDC facts not in evidence.
+7. signal: the one signal or number that will tell them the concept is holding. Tie it to the case where you can.
+
+Also fill "headline": their decision in a single clear sentence.
+
+Provide the record by calling the "decision_record" tool. Every field is shown to the decision-maker as markdown, and they can edit it before they confirm.
+
+=== THE CASE ===
+${CASE_TEXT}
+
+=== FACT-SHEET (IEDC's own audited figures; never invent numbers) ===
+${FACT_SHEET}`;
+
 // Forced-structured-output tool for the facilitator turn. Using tool-use means
 // the model fills a typed schema and Anthropic returns it already-parsed, so an
 // unescaped quote or newline in reply.text can never break JSON parsing.
@@ -290,6 +325,28 @@ const TURN_TOOL = {
       },
     },
     required: ["reply", "note", "state", "summon"],
+  },
+};
+
+// Forced-structured-output tool for the closing decision record. Same tool-use
+// discipline as the turn: Anthropic returns the typed object already parsed, so
+// quotes or newlines inside a section can never break it.
+const RECORD_TOOL = {
+  name: "decision_record",
+  description: "Set the decision-maker's own decision down as a structured record, centered on the concept of the solution.",
+  input_schema: {
+    type: "object",
+    properties: {
+      headline: { type: "string", description: "their decision in a single clear sentence" },
+      decision: { type: "string", description: "the direction they committed to, named plainly (markdown)" },
+      concept: { type: "string", description: "the concept of the solution: the one core idea the decision turns on, 2-3 sentences (markdown)" },
+      rests_on: { type: "string", description: "the facts and assumptions it depends on; cite Tier 1 figures where they matter (markdown)" },
+      set_aside: { type: "string", description: "the paths ruled out and the trade accepted (markdown)" },
+      unresolved: { type: "string", description: "the questions and risks knowingly carried forward (markdown)" },
+      first_move: { type: "string", description: "the concrete first action: who, by when, paid how (markdown)" },
+      signal: { type: "string", description: "the one signal or number that shows the concept is holding (markdown)" },
+    },
+    required: ["headline", "decision", "concept", "rests_on", "set_aside", "unresolved", "first_move", "signal"],
   },
 };
 
@@ -601,6 +658,32 @@ Deno.serve(async (req) => {
         `Synthesize now per your instructions: name the real fault line, add no opinion, pick no door, end with one question.`;
       const text = await callAnthropic(SYNTH_SYSTEM, user, 700, `${reqId} synthesize`);
       return json({ text: String(text ?? "").trim() });
+    }
+
+    // The closing: set the decision-maker's OWN decision down as a structured
+    // record, centered on the concept of the solution. Forced tool-use (no
+    // JSON.parse of free text). Records their decision; never grades or picks a
+    // door; never sees the instructor layer. The client falls back to a
+    // state-built record if this action is not deployed yet.
+    if (action === "record") {
+      const user =
+        `${formatState(state)}\n\n` +
+        `THE FULL EXCHANGE:\n${formatTranscript(history)}\n\n` +
+        `Set the decision-maker's decision down now by calling the decision_record tool. Center it on the concept of the solution. Reflect THEIR decision and reasoning faithfully; cite Tier 1 figures where they sharpen it; if they never committed, say so plainly. No score, no right answer, no epilogue.`;
+      const rec = await callAnthropicJSON(RECORD_SYSTEM, user, RECORD_TOOL, 1700, `${reqId} record`);
+      const str = (v: any) => String(v ?? "").trim();
+      return json({
+        record: {
+          headline: str(rec?.headline),
+          decision: str(rec?.decision),
+          concept: str(rec?.concept),
+          rests_on: str(rec?.rests_on),
+          set_aside: str(rec?.set_aside),
+          unresolved: str(rec?.unresolved),
+          first_move: str(rec?.first_move),
+          signal: str(rec?.signal),
+        },
+      });
     }
 
     return json({ error: "unknown action" }, 400);

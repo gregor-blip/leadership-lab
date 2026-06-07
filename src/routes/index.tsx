@@ -6,12 +6,15 @@ import {
   MENTORS,
   PARTICIPANT,
   EMPTY_STATE,
+  RECORD_SECTIONS,
+  recordFromState,
   type TranscriptEntry,
   type Figure,
   type ConvState,
   type PersonaStatement,
+  type DecisionRecord,
 } from "@/lib/simulator-data";
-import { getCase, sendTurn, callPersona, synthesize } from "@/lib/simulator-client";
+import { getCase, sendTurn, callPersona, synthesize, composeRecord } from "@/lib/simulator-client";
 import { Component, type ReactNode } from "react";
 
 // Per-message error boundary: a malformed model payload degrades to an inline
@@ -477,6 +480,11 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   const [thinking, setThinking] = useState(false);
   const [caseOpen, setCaseOpen] = useState(!(seed && seed.length)); // open to read first; collapsed when pre-seeded
   const [convState, setConvState] = useState<ConvState>(EMPTY_STATE); // distilled shared state, injected into personas
+  // The closing: "none" until the participant commits, then composing → review
+  // (edit the record) → done (the finish screen). Kept inside Conversation so it
+  // has the transcript and the distilled state in scope.
+  const [closing, setClosing] = useState<"none" | "composing" | "review" | "done">("none");
+  const [record, setRecord] = useState<DecisionRecord | null>(null);
   const sentRef = useRef<HTMLDivElement | null>(null);
 
   // On send, bring the participant's just-sent message to the top so it is
@@ -491,6 +499,12 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     sentRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }, [transcript]);
+
+  // Each closing stage opens at the top of the screen, not wherever the
+  // conversation was scrolled to when the participant hit Commit.
+  useEffect(() => {
+    if (closing !== "none" && typeof window !== "undefined") window.scrollTo(0, 0);
+  }, [closing]);
 
   async function runTurn(text: string) {
     if (!text || thinking) return;
@@ -564,6 +578,31 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
     }
   }
 
+  // Derived readiness for the closing affordance. "Commit" appears once there is
+  // anything to record (one participant turn); a soft turn ceiling later nudges
+  // toward the close so an unattended demo lands instead of wandering forever.
+  const participantTurns = transcript.filter((e) => e.kind === "participant").length;
+  const canCommit = participantTurns >= 1;
+  const atCeiling = participantTurns >= 12;
+
+  // Commit → compose the decision record from the transcript + distilled state.
+  // Tries the backend `record` action; on ANY failure (including the action not
+  // being deployed on the live function yet) it builds the record from the state
+  // tabs, so the close never dead-ends. Either way the participant lands on an
+  // editable review.
+  async function commit() {
+    if (thinking || closing !== "none") return;
+    setClosing("composing");
+    try {
+      const res = await composeRecord({ transcript, state: convState });
+      setRecord(res.record);
+    } catch {
+      setRecord(recordFromState(convState));
+    } finally {
+      setClosing("review");
+    }
+  }
+
   function send() {
     runTurn(input.trim());
   }
@@ -589,6 +628,20 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
       send();
     }
   }
+
+  // The closing takes over the screen: these are terminal stages of the case, so
+  // they replace the conversation rather than render below it.
+  if (closing === "composing") return <ComposingRecord />;
+  if (closing === "review" && record)
+    return (
+      <RecordEditor
+        record={record}
+        onChange={setRecord}
+        onConfirm={() => setClosing("done")}
+        onBack={() => setClosing("none")}
+      />
+    );
+  if (closing === "done" && record) return <FinishScreen record={record} />;
 
   return (
     <div className="pt-8">
@@ -619,12 +672,16 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
           {thinking && <Thinking />}
         </div>
 
+        {atCeiling && <CeilingNudge onCommit={commit} thinking={thinking} />}
+
         <Composer
           input={input}
           setInput={setInput}
           onSend={send}
           onKeyDown={onKeyDown}
           onConvene={convene}
+          onCommit={commit}
+          canCommit={canCommit}
           thinking={thinking}
         />
       </section>
@@ -781,6 +838,8 @@ function Composer({
   onSend,
   onKeyDown,
   onConvene,
+  onCommit,
+  canCommit,
   thinking,
 }: {
   input: string;
@@ -788,6 +847,8 @@ function Composer({
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onConvene: () => void;
+  onCommit: () => void;
+  canCommit: boolean;
   thinking: boolean;
 }) {
   return (
@@ -797,7 +858,19 @@ function Composer({
           <CouncilIcon />
           Convene the council
         </button>
-        <span className="kicker hidden sm:inline">One voice by default · you choose who weighs in</span>
+        {canCommit ? (
+          <button
+            onClick={onCommit}
+            disabled={thinking}
+            className="btn btn-ghost text-[11px]"
+            title="Set your decision down on the record"
+          >
+            Commit your decision
+            <ArrowIcon />
+          </button>
+        ) : (
+          <span className="kicker hidden sm:inline">One voice by default · you choose who weighs in</span>
+        )}
       </div>
 
       <div className="bezel">
@@ -834,6 +907,270 @@ function Footer() {
       </span>
       <span className="kicker text-ink-mute">IEDC · Bled</span>
     </footer>
+  );
+}
+
+/* ---------- the closing: commit → decision record → finish ---------- */
+
+// A soft turn ceiling. The case is meant to land, not run forever, so once the
+// participant has explored enough, the close becomes the prominent next step. The
+// composer stays open (no hard lock) — gentler for an unattended demo.
+function CeilingNudge({ onCommit, thinking }: { onCommit: () => void; thinking: boolean }) {
+  return (
+    <div className="reveal mb-3 bezel bezel-gold">
+      <div className="bezel-core flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
+        <div>
+          <div className="kicker kicker-ink flex items-center gap-2">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />
+            You&rsquo;ve explored the case thoroughly
+          </div>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
+            When you&rsquo;re ready, set your decision down on the record.
+          </p>
+        </div>
+        <button onClick={onCommit} disabled={thinking} className="btn btn-primary shrink-0">
+          Commit your decision
+          <span className="nub" aria-hidden>
+            <ArrowIcon />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The brief composing screen while the record is being set down.
+function ComposingRecord() {
+  return (
+    <section className="flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+      <div className="kicker mb-5 flex items-center gap-2">
+        <span className="flex gap-1" aria-hidden>
+          <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.2s]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.4s]" />
+        </span>
+        Recording your decision
+      </div>
+      <h2 className="display text-[clamp(30px,4.4vw,56px)] text-ink">Setting it down.</h2>
+      <p className="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-ink-soft">
+        Drawing your decision together from the case and everything you weighed.
+      </p>
+    </section>
+  );
+}
+
+// A textarea that grows to its content, so the record reads as a document rather
+// than a set of scrolling boxes.
+function AutoTextarea({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  useEffect(() => {
+    fit();
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onInput={fit}
+      rows={1}
+      placeholder={placeholder}
+      className={`w-full resize-none overflow-hidden bg-transparent outline-none placeholder:text-ink-mute ${className ?? ""}`}
+    />
+  );
+}
+
+// One editable section of the record. The concept of the solution (the spine)
+// gets a gold-wash panel so it reads as the centre of the document.
+function RecordField({
+  n,
+  label,
+  hint,
+  value,
+  onChange,
+  spine,
+}: {
+  n: string;
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (v: string) => void;
+  spine?: boolean;
+}) {
+  return (
+    <div className={`px-5 py-5 md:px-7 md:py-6 ${spine ? "bg-gold-wash/60" : ""}`}>
+      <div className="flex items-baseline gap-3">
+        <span className="section-num shrink-0 text-[20px] leading-none">{n}</span>
+        <div className="kicker kicker-ink pt-1">{label}</div>
+      </div>
+      <AutoTextarea
+        value={value}
+        onChange={onChange}
+        placeholder={hint}
+        className={`mt-3 text-ink ${
+          spine ? "serif text-[clamp(17px,2vw,21px)] leading-[1.5]" : "text-[15.5px] leading-relaxed md:text-[16px]"
+        }`}
+      />
+    </div>
+  );
+}
+
+// The decision record, editable. Built from the model (or the state tabs as a
+// fallback); the participant edits any field, then confirms.
+function RecordEditor({
+  record,
+  onChange,
+  onConfirm,
+  onBack,
+}: {
+  record: DecisionRecord;
+  onChange: (r: DecisionRecord) => void;
+  onConfirm: () => void;
+  onBack: () => void;
+}) {
+  const set = (key: keyof DecisionRecord, v: string) => onChange({ ...record, [key]: v });
+  return (
+    <section className="pb-16 pt-2">
+      {/* header */}
+      <div className="relative pb-8 pt-6 md:pt-10">
+        <div className="reveal kicker mb-5">
+          <span className="text-gold-line">04</span> &nbsp;/&nbsp; The decision · on the record
+        </div>
+        <h1 className="reveal reveal-1 display max-w-[16ch] text-[clamp(36px,5.5vw,76px)] text-ink">
+          Your decision, <span className="em">recorded.</span>
+        </h1>
+        <p className="reveal reveal-2 mt-5 max-w-[48ch] text-[16px] leading-relaxed text-ink-soft">
+          Drafted from the case and everything you weighed. Edit anything. This is your record, not ours.
+        </p>
+        <span className="section-num pointer-events-none absolute -top-1 right-0 hidden select-none text-[clamp(80px,10vw,150px)] opacity-40 lg:block">
+          04
+        </span>
+      </div>
+
+      {/* the lead line */}
+      <div className="reveal reveal-2 mb-6">
+        <div className="kicker mb-2">In a sentence</div>
+        <AutoTextarea
+          value={record.headline}
+          onChange={(v) => set("headline", v)}
+          placeholder="The decision in a sentence."
+          className="tagline text-[clamp(20px,2.6vw,30px)] leading-[1.3] text-ink"
+        />
+      </div>
+
+      {/* the seven sections */}
+      <div className="reveal reveal-3 bezel">
+        <div className="bezel-core divide-y divide-hair overflow-hidden">
+          {RECORD_SECTIONS.map((s) => (
+            <RecordField
+              key={s.key}
+              n={s.n}
+              label={s.label}
+              hint={s.hint}
+              value={record[s.key]}
+              onChange={(v) => set(s.key, v)}
+              spine={s.key === "concept"}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* actions */}
+      <div className="mt-9 flex flex-col items-start gap-4 border-t border-rule pt-7 sm:flex-row sm:items-center sm:justify-between">
+        <button onClick={onBack} className="btn btn-ghost">
+          Back to the conversation
+        </button>
+        <div className="flex items-center gap-4">
+          <span className="kicker hidden sm:inline">Editable · nothing is scored</span>
+          <button onClick={onConfirm} className="btn btn-primary">
+            Confirm decision
+            <span className="nub" aria-hidden>
+              <ArrowIcon />
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// The finish screen: the record set in type, read-only. No score, no praise, no
+// epilogue. In the full Lab this is where the student layer hands to the professor
+// layer; for now it rests here. "Begin again" resets the whole app.
+function FinishScreen({ record }: { record: DecisionRecord }) {
+  function restart() {
+    if (typeof window !== "undefined") window.location.assign("/");
+  }
+  return (
+    <section className="pb-20 pt-2">
+      <div className="pb-8 pt-6 text-center md:pt-12">
+        <div className="reveal kicker mb-5 inline-flex items-center gap-2">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />
+          Session complete
+        </div>
+        <h1 className="reveal reveal-1 display mx-auto max-w-[20ch] text-[clamp(30px,4.6vw,60px)] leading-[1.06] text-ink">
+          {record.headline || "Your decision is on the record."}
+        </h1>
+        <div className="reveal reveal-2 kicker mt-6 flex items-center justify-center gap-3 text-ink-mute">
+          <span>{PARTICIPANT.name}</span>
+          <span className="h-3 w-px bg-rule" aria-hidden />
+          <span>IEDC Leadership Lab</span>
+        </div>
+      </div>
+
+      {/* the record, read-only */}
+      <div className="reveal reveal-3 mx-auto max-w-[760px] bezel">
+        <div className="bezel-core divide-y divide-hair overflow-hidden">
+          {RECORD_SECTIONS.map((s) => {
+            const body = (record[s.key] ?? "").trim();
+            if (!body) return null;
+            return (
+              <div
+                key={s.key}
+                className={`px-5 py-5 md:px-7 md:py-6 ${s.key === "concept" ? "bg-gold-wash/60" : ""}`}
+              >
+                <div className="flex items-baseline gap-3">
+                  <span className="section-num shrink-0 text-[20px] leading-none">{s.n}</span>
+                  <div className="kicker kicker-ink pt-1">{s.label}</div>
+                </div>
+                <div className="mt-3">
+                  <Markdown text={body} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mx-auto mt-8 max-w-[760px]">
+        <p className="max-w-[60ch] text-[15px] leading-relaxed text-ink-soft">
+          In the full Lab, this record passes to the professor&rsquo;s layer for the debrief, where the quality of
+          the reasoning is explored, not the door you chose. For now, it rests here.
+        </p>
+        <div className="mt-7 flex items-center gap-4 border-t border-rule pt-6">
+          <button onClick={restart} className="btn btn-ghost">
+            Begin again
+            <ArrowIcon />
+          </button>
+          <span className="kicker">A fresh session</span>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   type ConvState,
   type PersonaStatement,
   type SynthesizeResponse,
+  type DecisionRecord,
 } from "./simulator-data";
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
@@ -67,5 +68,20 @@ export function synthesize(args: {
     history: toHistory(args.transcript),
     state: args.state,
     statements: args.statements,
+  });
+}
+
+// The closing: ask the backend to set the decision down as a structured record,
+// centered on the concept of the solution. Forced tool-use server-side (no
+// JSON.parse of free text). The caller falls back to a state-built record if this
+// throws — e.g. the `record` action is not deployed on the live function yet.
+export function composeRecord(args: {
+  transcript: TranscriptEntry[];
+  state: ConvState;
+}): Promise<{ record: DecisionRecord }> {
+  return call<{ record: DecisionRecord }>({
+    action: "record",
+    history: toHistory(args.transcript),
+    state: args.state,
   });
 }

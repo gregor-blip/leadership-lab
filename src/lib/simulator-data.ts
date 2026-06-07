@@ -89,6 +89,56 @@ export type PersonaStatement = { id: string; name: string; school: string; messa
 // The facilitator synthesis after a full council (the `synthesize` action).
 export type SynthesizeResponse = { text: string };
 
+// ---- The closing: the decision record (the `record` action). Seven sections,
+// centered on the concept of the solution. Every field is markdown and editable. ----
+export type DecisionRecord = {
+  headline: string;
+  decision: string;
+  concept: string;
+  rests_on: string;
+  set_aside: string;
+  unresolved: string;
+  first_move: string;
+  signal: string;
+};
+
+// Canonical section order + labels, shared by the editor and the final record.
+// (Designed from the case's own logic — the spec named "the concept of the
+// solution" as the spine but never enumerated the seven; rename freely.)
+export const RECORD_SECTIONS: {
+  key: Exclude<keyof DecisionRecord, "headline">;
+  n: string;
+  label: string;
+  hint: string;
+}[] = [
+  { key: "decision", n: "01", label: "The decision", hint: "The direction you committed to." },
+  { key: "concept", n: "02", label: "The concept of the solution", hint: "The one idea the whole decision turns on." },
+  { key: "rests_on", n: "03", label: "What it rests on", hint: "The facts and assumptions it depends on." },
+  { key: "set_aside", n: "04", label: "What you set aside", hint: "What you ruled out, and the trade you accepted." },
+  { key: "unresolved", n: "05", label: "What remains unresolved", hint: "The risks you are carrying forward." },
+  { key: "first_move", n: "06", label: "The first move", hint: "Who does what, by when, paid how." },
+  { key: "signal", n: "07", label: "How you will know it is working", hint: "The one signal that the concept is holding." },
+];
+
+// Client-side fallback: build a record straight from the Facilitator's distilled
+// state tabs, so the close still works if the `record` edge action is not deployed
+// yet (or fails). Blank fields render as editable prompts, never as errors.
+export function recordFromState(state: ConvState): DecisionRecord {
+  const dir = (state.direction || "").trim();
+  const committed = !!dir && !/^undecided/i.test(dir);
+  const join = (a: string[]) => (a && a.length ? a.map((x) => `- ${x}`).join("\n") : "");
+  return {
+    headline: committed ? dir : "The case rests undecided.",
+    decision: committed ? dir : "No single direction was committed. The case rests undecided.",
+    concept: "",
+    rests_on: join(state.decided ?? []),
+    set_aside: join(state.rejected ?? []),
+    unresolved: join(state.open ?? []),
+    first_move: "",
+    signal: "",
+  };
+}
+
 // ---- Transcript (flat, in-memory). `note` entries are display-only and are
 // NOT sent back to the model as history. ----
 export type TranscriptEntry =
