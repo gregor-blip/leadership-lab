@@ -331,6 +331,81 @@ ${list(state.open)}
 CURRENT LEANING: ${state.direction || "undecided"}`;
 }
 
+// ============================================================
+//  SPEND CAP — project-wide, micro-EUR. Soft warn at €18, hard stop at €20.
+//  Pricing: claude-sonnet-4 ≈ $3 / Mtok input, $15 / Mtok output.
+//  USD→EUR @ ~0.92 → €2.76 / Mtok input, €13.80 / Mtok output.
+//  Micro-EUR (1e-6 €) per token: input 2.76, output 13.80.
+// ============================================================
+const HARD_CAP_MICRO_EUR = 20_000_000n; // €20
+const WARN_CAP_MICRO_EUR = 18_000_000n; // €18
+const PRICE_IN_MICRO_PER_TOKEN = 2.76;
+const PRICE_OUT_MICRO_PER_TOKEN = 13.80;
+
+// Per-request mutable warn flag, set by post-call bump.
+let __reqWarn = false;
+
+function sbAdminHeaders(): Record<string, string> {
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  return {
+    apikey: key,
+    authorization: `Bearer ${key}`,
+    "content-type": "application/json",
+  };
+}
+
+async function readSpendTotal(): Promise<bigint> {
+  const url = Deno.env.get("SUPABASE_URL");
+  if (!url) throw new Error("SUPABASE_URL not configured");
+  const res = await fetch(`${url}/rest/v1/rpc/bump_ai_spend`, {
+    method: "POST",
+    headers: sbAdminHeaders(),
+    body: JSON.stringify({ amount_micro: 0 }),
+  });
+  if (!res.ok) {
+    console.error("spend read failed", res.status, await res.text());
+    return 0n;
+  }
+  const v = await res.json();
+  return BigInt(v ?? 0);
+}
+
+async function bumpSpend(amountMicro: number): Promise<bigint> {
+  const url = Deno.env.get("SUPABASE_URL");
+  if (!url) throw new Error("SUPABASE_URL not configured");
+  const amt = Math.max(0, Math.round(amountMicro));
+  const res = await fetch(`${url}/rest/v1/rpc/bump_ai_spend`, {
+    method: "POST",
+    headers: sbAdminHeaders(),
+    body: JSON.stringify({ amount_micro: amt }),
+  });
+  if (!res.ok) {
+    console.error("spend bump failed", res.status, await res.text());
+    return 0n;
+  }
+  const v = await res.json();
+  return BigInt(v ?? 0);
+}
+
+class SpendCapError extends Error {
+  constructor(public totalMicro: bigint) {
+    super("spend_cap_reached");
+  }
+}
+
+async function preCheckSpendCap(): Promise<void> {
+  const total = await readSpendTotal();
+  if (total >= HARD_CAP_MICRO_EUR) throw new SpendCapError(total);
+}
+
+async function recordUsage(usage: any): Promise<void> {
+  const inTok = Number(usage?.input_tokens ?? 0);
+  const outTok = Number(usage?.output_tokens ?? 0);
+  const cost = inTok * PRICE_IN_MICRO_PER_TOKEN + outTok * PRICE_OUT_MICRO_PER_TOKEN;
+  const total = await bumpSpend(cost);
+  if (total >= WARN_CAP_MICRO_EUR) __reqWarn = true;
+}
+
 async function callAnthropic(system: string, user: string, maxTokens = 1400): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -354,12 +429,10 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400): Pr
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
+  await recordUsage(data?.usage);
   return data.content?.[0]?.text ?? "";
 }
 
-// Forced structured output via tool-use. Returns the tool input object already
-// parsed by Anthropic — no JSON.parse of free text, so malformed model JSON
-// (unescaped quotes/newlines) can never throw here.
 async function callAnthropicJSON(system: string, user: string, tool: any, maxTokens = 1600): Promise<any> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -381,6 +454,7 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
+  await recordUsage(data?.usage);
   const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
   if (!block || !block.input) throw new Error("no tool_use block in response");
   return block.input;
