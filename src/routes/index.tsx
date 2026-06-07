@@ -1108,8 +1108,10 @@ function AutoTextarea({
   );
 }
 
-// One editable section of the record. The concept of the solution (the spine)
-// gets a gold-wash panel so it reads as the centre of the document.
+// One section of the record. Uniform serif body and rhythm across all seven, so
+// the page reads as one editorial document rather than seven boxes. The concept of
+// the solution (the spine) leads with an ink label and a short gold rule: presence
+// by accent, not a highlight panel.
 function RecordField({
   n,
   label,
@@ -1126,18 +1128,19 @@ function RecordField({
   spine?: boolean;
 }) {
   return (
-    <div className={`px-5 py-5 md:px-7 md:py-6 ${spine ? "bg-gold-wash/60" : ""}`}>
-      <div className="flex items-baseline gap-3">
-        <span className="section-num shrink-0 text-[20px] leading-none">{n}</span>
-        <div className="kicker kicker-ink pt-1">{label}</div>
+    <div className="py-8 first:pt-1 md:py-10">
+      <div className="flex items-baseline gap-4">
+        <span className="section-num shrink-0 text-[clamp(26px,3.4vw,38px)]">{n}</span>
+        <div className="min-w-0">
+          <div className={spine ? "kicker kicker-ink" : "kicker"}>{label}</div>
+          {spine && <div className="mt-2 h-px w-12 bg-gold-line/55" aria-hidden />}
+        </div>
       </div>
       <AutoTextarea
         value={value}
         onChange={onChange}
         placeholder={hint}
-        className={`mt-3 text-ink ${
-          spine ? "serif text-[clamp(17px,2vw,21px)] leading-[1.5]" : "text-[15.5px] leading-relaxed md:text-[16px]"
-        }`}
+        className="serif mt-4 max-w-[62ch] text-[clamp(16px,1.65vw,17.5px)] leading-[1.62] text-ink"
       />
     </div>
   );
@@ -1158,7 +1161,7 @@ function RecordEditor({
 }) {
   const set = (key: keyof DecisionRecord, v: string) => onChange({ ...record, [key]: v });
   return (
-    <section className="pb-16 pt-2">
+    <section className="mx-auto max-w-[760px] pb-16 pt-2">
       {/* header */}
       <div className="relative pb-8 pt-6 md:pt-10">
         <div className="reveal kicker mb-5">
@@ -1186,21 +1189,19 @@ function RecordEditor({
         />
       </div>
 
-      {/* the seven sections */}
-      <div className="reveal reveal-3 bezel">
-        <div className="bezel-core divide-y divide-hair overflow-hidden">
-          {RECORD_SECTIONS.map((s) => (
-            <RecordField
-              key={s.key}
-              n={s.n}
-              label={s.label}
-              hint={s.hint}
-              value={record[s.key]}
-              onChange={(v) => set(s.key, v)}
-              spine={s.key === "concept"}
-            />
-          ))}
-        </div>
+      {/* the seven sections — one editorial document, hairline-ruled, no box */}
+      <div className="reveal reveal-3 mt-2 divide-y divide-rule border-t border-rule">
+        {RECORD_SECTIONS.map((s) => (
+          <RecordField
+            key={s.key}
+            n={s.n}
+            label={s.label}
+            hint={s.hint}
+            value={record[s.key]}
+            onChange={(v) => set(s.key, v)}
+            spine={s.key === "concept"}
+          />
+        ))}
       </div>
 
       {/* confirm — the Facilitator asks before it is finalized */}
@@ -1251,28 +1252,27 @@ function FinishScreen({ record }: { record: DecisionRecord }) {
         </div>
       </div>
 
-      {/* the record, read-only */}
-      <div className="reveal reveal-3 mx-auto max-w-[760px] bezel">
-        <div className="bezel-core divide-y divide-hair overflow-hidden">
-          {RECORD_SECTIONS.map((s) => {
-            const body = (record[s.key] ?? "").trim();
-            if (!body) return null;
-            return (
-              <div
-                key={s.key}
-                className={`px-5 py-5 md:px-7 md:py-6 ${s.key === "concept" ? "bg-gold-wash/60" : ""}`}
-              >
-                <div className="flex items-baseline gap-3">
-                  <span className="section-num shrink-0 text-[20px] leading-none">{s.n}</span>
-                  <div className="kicker kicker-ink pt-1">{s.label}</div>
-                </div>
-                <div className="mt-3">
-                  <Markdown text={body} />
+      {/* the record, read-only — one editorial document, hairline-ruled, no box */}
+      <div className="reveal reveal-3 mx-auto max-w-[760px] divide-y divide-rule border-t border-rule">
+        {RECORD_SECTIONS.map((s) => {
+          const body = (record[s.key] ?? "").trim();
+          if (!body) return null;
+          const spine = s.key === "concept";
+          return (
+            <div key={s.key} className="py-8 md:py-10">
+              <div className="flex items-baseline gap-4">
+                <span className="section-num shrink-0 text-[clamp(26px,3.4vw,38px)]">{s.n}</span>
+                <div className="min-w-0">
+                  <div className={spine ? "kicker kicker-ink" : "kicker"}>{s.label}</div>
+                  {spine && <div className="mt-2 h-px w-12 bg-gold-line/55" aria-hidden />}
                 </div>
               </div>
-            );
-          })}
-        </div>
+              <div className="serif mt-4 max-w-[62ch] text-ink">
+                <Markdown text={body} />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mx-auto mt-8 max-w-[760px]">
