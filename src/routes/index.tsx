@@ -485,6 +485,14 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
   // has the transcript and the distilled state in scope.
   const [closing, setClosing] = useState<"none" | "composing" | "review" | "done">("none");
   const [record, setRecord] = useState<DecisionRecord | null>(null);
+  // Latency meter: live elapsed while a turn is in flight + the last turn's
+  // per-call timings. The detailed panel is gated behind ?debug=1; the count-up on
+  // the Thinking indicator is always shown so a long wait never looks frozen.
+  const [elapsed, setElapsed] = useState(0);
+  const [meter, setMeter] = useState<CallTiming[] | null>(null);
+  const [debug] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1"
+  );
   const sentRef = useRef<HTMLDivElement | null>(null);
 
   // On send, bring the participant's just-sent message to the top so it is
@@ -506,6 +514,16 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
     if (closing !== "none" && typeof window !== "undefined") window.scrollTo(0, 0);
   }, [closing]);
 
+  // Count up while a turn is in flight, so a long wait shows a live timer instead
+  // of a frozen "Thinking…". Resets at the start of each turn.
+  useEffect(() => {
+    if (!thinking) return;
+    const start = performance.now();
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(performance.now() - start), 100);
+    return () => clearInterval(id);
+  }, [thinking]);
+
   async function runTurn(text: string) {
     if (!text || thinking) return;
     const snapshot = transcript; // history = turns BEFORE this message
@@ -514,8 +532,13 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
     setTranscript(withParticipant);
     setInput("");
     setThinking(true);
+    // Time every model call this turn: one Facilitator call, plus up to six more
+    // (five mentors + a synthesis) once the council is convened.
+    const timings: CallTiming[] = [];
     try {
+      const t0 = performance.now();
       const res = await sendTurn(text, snapshot, convState);
+      timings.push({ label: "Facilitator", ms: performance.now() - t0 });
       let running: TranscriptEntry[] = [...withParticipant];
       if (res.reply?.text)
         running = [...running, { kind: "facilitator", text: res.reply.text, figures: res.reply.figures ?? [] }];
@@ -525,12 +548,16 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
       if (res.state) setConvState(res.state);
       const ids = res.summon?.ids ?? [];
       if (res.summon && res.summon.mode !== "none" && ids.length) {
-        await runCouncil(ids, text, running, nextState);
+        await runCouncil(ids, text, running, nextState, timings);
       }
     } catch (e) {
       toast.error("Couldn't get a reply", { description: String((e as any)?.message ?? e) });
     } finally {
       setThinking(false);
+      if (timings.length) {
+        setMeter(timings);
+        logMeter(timings);
+      }
     }
   }
 
@@ -541,11 +568,13 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
     ids: string[],
     participantMessage: string,
     baseTranscript: TranscriptEntry[],
-    state: ConvState
+    state: ConvState,
+    timings: CallTiming[]
   ) {
     const priors: PersonaStatement[] = [];
     let running = baseTranscript;
     for (const id of ids) {
+      const t0 = performance.now();
       try {
         const stmt = await callPersona({
           personaId: id,
@@ -554,6 +583,7 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
           state,
           priorStatements: priors,
         });
+        timings.push({ label: stmt?.name ?? id, ms: performance.now() - t0 });
         if (!stmt?.id) continue;
         priors.push(stmt);
         running = [
@@ -562,17 +592,21 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
         ];
         setTranscript(running);
       } catch (e) {
+        timings.push({ label: `${id} (failed)`, ms: performance.now() - t0 });
         toast.error("A mentor didn't make it in", { description: String((e as any)?.message ?? e) });
       }
     }
     if (priors.length > 1) {
+      const t0 = performance.now();
       try {
         const syn = await synthesize({ transcript: baseTranscript, state, statements: priors });
+        timings.push({ label: "Synthesis", ms: performance.now() - t0 });
         if (syn?.text) {
           running = [...running, { kind: "facilitator", text: syn.text, figures: [] }];
           setTranscript(running);
         }
       } catch {
+        timings.push({ label: "Synthesis (failed)", ms: performance.now() - t0 });
         // synthesis is a nice-to-have; never fail the whole council on it
       }
     }
@@ -669,8 +703,10 @@ function Conversation({ caseText, seed }: { caseText: string; seed?: TranscriptE
               </ItemBoundary>
             );
           })}
-          {thinking && <Thinking />}
+          {thinking && <Thinking elapsed={elapsed} />}
         </div>
+
+        {debug && meter && <Meter rows={meter} />}
 
         {atCeiling && <CeilingNudge onCommit={commit} thinking={thinking} />}
 
@@ -733,7 +769,45 @@ function EmptyState() {
   );
 }
 
-function Thinking() {
+type CallTiming = { label: string; ms: number };
+
+// Console line per turn, so timings land in the browser log too, alongside the
+// server-side per-call model timing the simulator function already logs to Cloud.
+function logMeter(rows: CallTiming[]) {
+  const total = rows.reduce((a, r) => a + r.ms, 0);
+  const parts = rows.map((r) => `${r.label} ${(r.ms / 1000).toFixed(1)}s`).join(" · ");
+  // eslint-disable-next-line no-console
+  console.log(`[meter] ${rows.length} call${rows.length === 1 ? "" : "s"} · total ${(total / 1000).toFixed(1)}s · ${parts}`);
+}
+
+// The diagnostic panel (?debug=1): the last turn's wall-clock, per call. Wall-clock
+// = model time + network + any function cold start, measured on the client. One row
+// for a plain question; up to seven once the council is convened.
+function Meter({ rows }: { rows: CallTiming[] }) {
+  const total = rows.reduce((a, r) => a + r.ms, 0);
+  return (
+    <div className="fixed bottom-3 left-3 z-[40] w-[250px] rounded-[10px] border border-rule bg-card/95 px-3.5 py-3 shadow-[0_18px_40px_-26px_rgba(40,30,10,0.55)] backdrop-blur-sm">
+      <div className="kicker kicker-ink mb-2 flex items-center justify-between gap-3">
+        <span>Last turn</span>
+        <span className="numeral text-[13px] text-ink">{(total / 1000).toFixed(1)}s</span>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center justify-between gap-3">
+            <span className="truncate text-[12px] text-ink-soft">{r.label}</span>
+            <span className="numeral shrink-0 text-[12px] text-ink-mute">{(r.ms / 1000).toFixed(1)}s</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 border-t border-hair pt-1.5 text-[10px] leading-snug text-ink-mute">
+        {rows.length} model call{rows.length === 1 ? "" : "s"} · client round-trip
+      </div>
+    </div>
+  );
+}
+
+function Thinking({ elapsed }: { elapsed: number }) {
+  const secs = elapsed / 1000;
   return (
     <div className="flex items-center gap-2.5 px-1 text-ink-mute">
       <span className="flex gap-1">
@@ -741,7 +815,7 @@ function Thinking() {
         <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.2s]" />
         <span className="h-1.5 w-1.5 rounded-full bg-gold-line/70 [animation:nowpulse_1.2s_ease-in-out_infinite_0.4s]" />
       </span>
-      <span className="kicker">Thinking…</span>
+      <span className="kicker">{secs >= 1.5 ? `Thinking · ${secs.toFixed(0)}s` : "Thinking…"}</span>
     </div>
   );
 }
