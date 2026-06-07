@@ -404,6 +404,15 @@ ${list(state.open)}
 CURRENT LEANING: ${state.direction || "undecided"}`;
 }
 
+// Wrap the large, static system prompt as a cached block so Anthropic reuses it
+// across calls instead of re-reading it every time. Cuts latency and cost on
+// repeat turns (the case + fact-sheet + rules are identical every call). 5-minute
+// ephemeral cache, refreshed on each hit; verify via cache_read_input_tokens in
+// the usage log below.
+function cachedSystem(system: string) {
+  return [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+}
+
 async function callAnthropic(system: string, user: string, maxTokens = 1400, tag = ""): Promise<string> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -419,7 +428,7 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400, tag
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
-      system,
+      system: cachedSystem(system),
       messages: [{ role: "user", content: user }],
     }),
   });
@@ -431,6 +440,8 @@ async function callAnthropic(system: string, user: string, maxTokens = 1400, tag
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
+  const u = data.usage ?? {};
+  console.log(`[sim ${tag}] usage in=${u.input_tokens ?? 0} cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0} out=${u.output_tokens ?? 0}`);
   return data.content?.[0]?.text ?? "";
 }
 
@@ -448,7 +459,7 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
-      system,
+      system: cachedSystem(system),
       messages: [{ role: "user", content: user }],
       tools: [tool],
       tool_choice: { type: "tool", name: tool.name },
@@ -462,6 +473,8 @@ async function callAnthropicJSON(system: string, user: string, tool: any, maxTok
     throw new Error(`Anthropic upstream error (${res.status})`);
   }
   const data = await res.json();
+  const u = data.usage ?? {};
+  console.log(`[sim ${tag}] usage in=${u.input_tokens ?? 0} cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0} out=${u.output_tokens ?? 0}`);
   const block = (data.content ?? []).find((b: any) => b?.type === "tool_use");
   if (!block || !block.input) throw new Error("no tool_use block in response");
   return block.input;
